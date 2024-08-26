@@ -23,13 +23,14 @@ case class ZJParameters(
   Y: Int = 0,
   DC: Boolean = false,
   P: Boolean = false,
-  snoopEjectBufDepth: Int = 4,
-  reqEjectBufDepth: Int = 4,
+  snoopEjectBufDepth: Int = 8,
+  reqEjectBufDepth: Int = 8,
   localNodeParams: Seq[NodeParam] = Seq(),
   csnNodeParams: Seq[NodeParam] = Seq(),
   c2cParams: C2cParams = C2cParams(),
   tfbParams: Option[TrafficBoardParams] = Some(TrafficBoardParams()),
-  tfsParams: Option[TrafficSimParams] = None
+  tfsParams: Option[TrafficSimParams] = None,
+  injectRsvdTimerShift: Int = 8
 ) {
   val requestAddrBits = 48
   val snoopAddrBits = requestAddrBits - 3
