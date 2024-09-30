@@ -4,10 +4,15 @@ import zhujiang._
 import zhujiang.chi._
 import chisel3._
 import chisel3.util._
+import xijiang.bridge.parameter._
 import org.chipsalliance.cde.config._
 import xijiang.bridge.parameter.CHIOp._
 import xijiang.bridge.parameter.BridgeParam
 import xijiang.bridge.parameter.BridgeParamKey
+import freechips.rocketchip.diplomacy.BufferParams.pipe
+import xijiang.bridge.parameter.CHIOp.REQ.ReadOnce
+import freechips.rocketchip.diplomacy.BufferParams.flow
+import freechips.rocketchip.regmapper.RegField.r
 
 object DDRState {
   val width        = 2
@@ -17,14 +22,15 @@ object DDRState {
   val WriteData    = "b11".U
 }
 
-class DDREntry(implicit p: Parameters) extends Bundle {
+class DDREntry(implicit p: Parameters) extends BridgeBundle {
     val state           = UInt(DDRState.width.W)
-    val datVal          = Vec(2, Bool())
-    val data            = Vec(2, UInt(256.W))
-    val addr            = UInt(64.W)
+    val datVal          = Vec(nrBeat, Bool())
+    val data            = Vec(nrBeat, UInt(fakeMemBits.W))
+    val addr            = UInt(fakeMemBits.W)
+    val txnid           = UInt(12.W)
 }
 
-class FakeCHISlave(implicit p : Parameters) extends Module {
+class FakeCHISlave(implicit p : Parameters) extends BridgeModule {
   //---------------------------------------------------------------------------------------------------------------------------------//
   //----------------------------------------------------- IO Bundle -----------------------------------------------------------------//
   //---------------------------------------------------------------------------------------------------------------------------------//
@@ -38,19 +44,24 @@ class FakeCHISlave(implicit p : Parameters) extends Module {
 
     //Mem interface
       val ren   = Output(Bool())
-      val raddr = Output(UInt(64.W))
-      val rData = Input(UInt(64.W))
+      val raddr = Output(UInt(fakeMemBits.W))
+      val rData = Input(UInt(fakeMemBits.W))
 
       val wen   = Output(Bool())
-      val waddr = Output(UInt(64.W))
-      val wmask = Output(UInt(64.W))
-      val wdata = Output(UInt(64.W))
+      val waddr = Output(UInt(fakeMemBits.W))
+      val wmask = Output(UInt(fakeMemBits.W))
+      val wdata = Output(UInt(fakeMemBits.W))
     })
   //---------------------------------------------------------------------------------------------------------------------------------//
   //-------------------------------------------------- Reg and Wire Define ----------------------------------------------------------//
   //---------------------------------------------------------------------------------------------------------------------------------//
-  val mem          = Seq.fill(2) { Module(new MemHelper()) }
+  val mem          = Seq.fill(nrBeat) { Module(new MemHelper()) }
   val wrBufRegVec  = RegInit(VecInit(Seq.fill(16){0.U.asTypeOf(new DDREntry)}))
+
+  val rDataQueue   = Module(new Queue(Vec(nrBeat, UInt(chiBeatBits.W)), entries = 4, flow = false, pipe = true))
+  val rReqQueue    = Module(new Queue(new ReqFlit, entries = 4, flow = false, pipe = true))
+  val rDataFlitQ   = Module(new Queue(new DataFlit, entries = 4, flow = false, pipe = true))
+
 
   val bufFreeVec     = wrBufRegVec.map(_.state === DDRState.Free)
   val bufSendDBIDVec = wrBufRegVec.map(_.state === DDRState.SendDBIDResp)
@@ -61,12 +72,12 @@ class FakeCHISlave(implicit p : Parameters) extends Module {
   
   
   val receiptValid = RegInit(false.B)
-  val receiptGen   = Wire(io.txreq.bits.Opcode === REQ.ReadOnce && io.txreq.fire && io.txreq.bits.Order =/= 0.U)
+  val receiptGen   = Wire(rReqQueue.io.deq.fire)
   val readReceipt  = RegInit(0.U.asTypeOf(new RespFlit))
 
-  val dbidResp     = RegInit(0.U.asTypeOf(new RespFlit))
   val dbidValid    = Wire((io.txreq.bits.Opcode === REQ.WriteUniqueFull || io.txreq.bits.Opcode === REQ.WriteUniquePtl) & io.txreq.fire)
-
+  
+  val sendBeatNumReg = RegInit(0.U(beatNumBits.W))
 
   //---------------------------------------------------------------------------------------------------------------------------------//
   //------------------------------------------------------- Logic -------------------------------------------------------------------//
@@ -79,7 +90,7 @@ class FakeCHISlave(implicit p : Parameters) extends Module {
   when(receiptGen){
     receiptValid := true.B
   }
-  when(io.rxrsp.fire){
+  when(io.rxrsp.fire & io.rxrsp.bits.Opcode === RSP.ReadReceipt){
     receiptValid := false.B
   }
 
@@ -87,23 +98,40 @@ class FakeCHISlave(implicit p : Parameters) extends Module {
     readReceipt.TxnID  := io.txreq.bits.TxnID
     readReceipt.Opcode := RSP.ReadReceipt
   }
-  
-  io.rxrsp.bits  := Mux(receiptValid, readReceipt, 0.U.asTypeOf(readReceipt))
-  io.rxrsp.valid := receiptValid
+
 
   /* 
-   * Generate CompDBIDResp
+   * Read data from fake mem
    */
-
-  when(dbidValid){
-    // dbidResp.DBID   := selFreeBuf
-    dbidResp.TxnID  := io.txreq.bits.TxnID
-    dbidResp.Opcode := RSP.CompDBIDResp
+  
+   when(io.txreq.fire & io.txreq.bits.Opcode === REQ.ReadOnce){
+    rReqQueue.io.enq <> io.txreq
+   }
+   mem.foreach { case m => m.clk := clock}
+   mem.foreach { case m => 
+    m.rIdx := rReqQueue.io.deq.bits.Addr
+    m.ren  := rReqQueue.io.deq.fire
   }
 
+  rDataQueue.io.enq.valid := rReqQueue.io.deq.fire
+  rDataQueue.io.enq.bits  := Cat(mem.map(_.rdata)).asTypeOf(Vec(nrBeat, UInt(chiBeatBits.W)))
+  rDataQueue.io.deq.ready := sendBeatNumReg === (nrBeat - 1).U & io.rxdat.fire
+  
+  rDataFlitQ.io.deq.ready := sendBeatNumReg === (nrBeat - 1).U & io.rxdat.fire
+
+  sendBeatNumReg := sendBeatNumReg + io.rxdat.fire.asUInt
+
+  rReqQueue.io.deq.ready  := rDataFlitQ.io.enq.ready
+  rDataFlitQ.io.enq.valid := rReqQueue.io.deq.valid
+  rDataFlitQ.io.enq.bits  := DontCare
+  rDataFlitQ.io.enq.bits.Opcode := DAT.CompData
+  rDataFlitQ.io.enq.bits.TxnID  := rReqQueue.io.deq.bits.TxnID
+
+  
+
 
   /* 
-   * FSM Updata
+   * Write FSM Updata
    */
 
   wrBufRegVec.zipWithIndex.foreach{
@@ -114,6 +142,7 @@ class FakeCHISlave(implicit p : Parameters) extends Module {
           when(hit){
             w.state := DDRState.SendDBIDResp
             w.addr  := io.txreq.bits.Addr
+            w.txnid := io.txreq.bits.TxnID
           }.otherwise{
             w := 0.U.asTypeOf(w)
           }
@@ -128,8 +157,12 @@ class FakeCHISlave(implicit p : Parameters) extends Module {
           val hit = io.txdat.fire & io.txdat.bits.TxnID === i.U
           when(hit){
             w.state := Mux(PopCount(w.datVal) === 1.U, DDRState.WriteData, w.state)
-            w.datVal
+            w.datVal(toBeatNum(io.txdat.bits.DataID)) := true.B
+            w.data(toBeatNum(io.txdat.bits.DataID))   := io.txdat.bits.Data
           }
+        }
+        is(DDRState.WriteData) {
+          w.state := DDRState.Free
         }
       }
   }
@@ -139,10 +172,20 @@ class FakeCHISlave(implicit p : Parameters) extends Module {
   //---------------------------------------------------- IO Interface ---------------------------------------------------------------//
   //---------------------------------------------------------------------------------------------------------------------------------//
 
-  io.rxrsp.bits  := Mux(receiptValid, readReceipt, 0.U.asTypeOf(readReceipt))
-  io.rxrsp.valid := receiptValid
 
   io.txreq.ready := bufFreeVec.reduce(_|_)
-  io.txdat.ready := bufWaitDataVec.reduce(_|_)
 
+  io.txdat.ready := true.B
+
+  io.rxrsp.valid       := bufSendDBIDVec.reduce(_|_) | receiptValid
+  io.rxrsp.bits.Opcode := Mux(receiptValid, RSP.ReadReceipt, RSP.CompDBIDResp)
+  io.rxrsp.bits.DBID   := selSendDBIDBuf
+  io.rxrsp.bits.TxnID  := Mux(receiptValid, readReceipt.TxnID, wrBufRegVec(selSendDBIDBuf).txnid)
+
+  io.rxdat.valid       := rDataQueue.io.deq.valid & rDataFlitQ.io.deq.valid
+  io.rxdat.bits        := rDataFlitQ.io.deq.bits
+  io.rxdat.bits.Data   := rDataQueue.io.deq.bits(sendBeatNumReg)
+  io.rxdat.bits.DataID := toDataID(sendBeatNumReg)
+
+  
 }

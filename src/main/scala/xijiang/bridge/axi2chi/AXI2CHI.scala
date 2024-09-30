@@ -14,7 +14,7 @@ import _root_.circt.stage.FirtoolOption
 import chisel3.stage.ChiselGeneratorAnnotation
 import _root_.circt.stage._
 
-class AXI2CHI(implicit p: Parameters) extends Module{
+class AXI2CHI(implicit p: Parameters) extends BridgeModule{
   val io = IO(new Bundle {
     // AXI4 Interface
     val axi_aw = Flipped(Decoupled(new AXI4BundleAW(AXI4Params())))

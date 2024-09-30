@@ -9,7 +9,7 @@ import xijiang.bridge.parameter._
 import zhujiang._
 import zhujiang.chi._
 
-class ReadHandle(implicit p: Parameters) extends Module{
+class ReadHandle(implicit p: Parameters) extends BridgeModule{
   val io = IO(new Bundle {
     // AXI4 Interface
     val axi_ar = Flipped(Decoupled(new AXI4BundleAR(AXI4Params())))
