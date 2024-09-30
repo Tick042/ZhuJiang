@@ -29,3 +29,6 @@ verilog: build-dir
 
 clean:
 	rm -r build/*
+	
+axi2chi:
+	mill -i zhujiang.runMain xijiang.bridge.axi2chi.AXI2CHI -td build
