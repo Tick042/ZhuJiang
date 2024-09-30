@@ -9,10 +9,10 @@ import org.chipsalliance.cde.config._
 import xijiang.bridge.parameter.CHIOp._
 import xijiang.bridge.parameter.BridgeParam
 import xijiang.bridge.parameter.BridgeParamKey
-import freechips.rocketchip.diplomacy.BufferParams.pipe
-import xijiang.bridge.parameter.CHIOp.REQ.ReadOnce
-import freechips.rocketchip.diplomacy.BufferParams.flow
-import freechips.rocketchip.regmapper.RegField.r
+import xijiang.bridge.Utils.GenerateVerilog
+import _root_.circt.stage.FirtoolOption
+import chisel3.stage.ChiselGeneratorAnnotation
+import _root_.circt.stage._
 
 object DDRState {
   val width        = 2
@@ -26,6 +26,7 @@ class DDREntry(implicit p: Parameters) extends BridgeBundle {
     val state           = UInt(DDRState.width.W)
     val datVal          = Vec(nrBeat, Bool())
     val data            = Vec(nrBeat, UInt(fakeMemBits.W))
+    val mask            = Vec(nrBeat, UInt(fakeMemBits.W))
     val addr            = UInt(fakeMemBits.W)
     val txnid           = UInt(12.W)
 }
@@ -42,15 +43,6 @@ class FakeCHISlave(implicit p : Parameters) extends BridgeModule {
       val rxrsp = DecoupledIO(new RespFlit)
       val rxdat = DecoupledIO(new DataFlit)
 
-    //Mem interface
-      val ren   = Output(Bool())
-      val raddr = Output(UInt(fakeMemBits.W))
-      val rData = Input(UInt(fakeMemBits.W))
-
-      val wen   = Output(Bool())
-      val waddr = Output(UInt(fakeMemBits.W))
-      val wmask = Output(UInt(fakeMemBits.W))
-      val wdata = Output(UInt(fakeMemBits.W))
     })
   //---------------------------------------------------------------------------------------------------------------------------------//
   //-------------------------------------------------- Reg and Wire Define ----------------------------------------------------------//
@@ -66,18 +58,22 @@ class FakeCHISlave(implicit p : Parameters) extends BridgeModule {
   val bufFreeVec     = wrBufRegVec.map(_.state === DDRState.Free)
   val bufSendDBIDVec = wrBufRegVec.map(_.state === DDRState.SendDBIDResp)
   val bufWaitDataVec = wrBufRegVec.map(_.state === DDRState.WaitData)
+  val bufWrDataVec   = wrBufRegVec.map(_.state === DDRState.WriteData)
 
   val selFreeBuf   = PriorityEncoder(bufFreeVec)
   val selSendDBIDBuf = PriorityEncoder(bufSendDBIDVec)
+  val selWrDataBuf   = PriorityEncoder(bufWrDataVec)
   
   
   val receiptValid = RegInit(false.B)
-  val receiptGen   = Wire(rReqQueue.io.deq.fire)
+  val receiptGen   = WireInit(rReqQueue.io.deq.fire)
   val readReceipt  = RegInit(0.U.asTypeOf(new RespFlit))
 
-  val dbidValid    = Wire((io.txreq.bits.Opcode === REQ.WriteUniqueFull || io.txreq.bits.Opcode === REQ.WriteUniquePtl) & io.txreq.fire)
+  val dbidValid    = WireInit((io.txreq.bits.Opcode === REQ.WriteUniqueFull || io.txreq.bits.Opcode === REQ.WriteUniquePtl) & io.txreq.fire)
   
   val sendBeatNumReg = RegInit(0.U(beatNumBits.W))
+
+  val mask = WireInit(VecInit(Seq.fill(chiBeatByte){0.U(8.W)}))
 
   //---------------------------------------------------------------------------------------------------------------------------------//
   //------------------------------------------------------- Logic -------------------------------------------------------------------//
@@ -104,9 +100,9 @@ class FakeCHISlave(implicit p : Parameters) extends BridgeModule {
    * Read data from fake mem
    */
   
-   when(io.txreq.fire & io.txreq.bits.Opcode === REQ.ReadOnce){
+  //  when(io.txreq.fire & io.txreq.bits.Opcode === REQ.ReadOnce){
     rReqQueue.io.enq <> io.txreq
-   }
+  //  }
    mem.foreach { case m => m.clk := clock}
    mem.foreach { case m => 
     m.rIdx := rReqQueue.io.deq.bits.Addr
@@ -127,7 +123,26 @@ class FakeCHISlave(implicit p : Parameters) extends BridgeModule {
   rDataFlitQ.io.enq.bits.Opcode := DAT.CompData
   rDataFlitQ.io.enq.bits.TxnID  := rReqQueue.io.deq.bits.TxnID
 
-  
+  /* 
+   * Write data to fake mem
+   */
+  val be = io.txdat.bits.BE.asTypeOf(Vec(chiBeatByte, UInt(1.W)))
+  mask.zip(be).foreach{
+    case(m, b) =>
+      when(b === 1.U){
+        m := 255.U
+      }.otherwise{
+        m := 0.U      }
+  }
+
+  mem.zipWithIndex.foreach{
+    case(m, i) =>
+      m.wIdx  := wrBufRegVec(selWrDataBuf).addr
+      m.wen   := bufWrDataVec.reduce(_|_)
+      m.wdata := wrBufRegVec(selWrDataBuf).data.asTypeOf(Vec(nrBeat, UInt(64.W)))(i)
+      m.mask  := wrBufRegVec(selWrDataBuf).mask.asTypeOf(Vec(nrBeat, UInt(64.W)))(i)
+  }
+
 
 
   /* 
@@ -159,6 +174,7 @@ class FakeCHISlave(implicit p : Parameters) extends BridgeModule {
             w.state := Mux(PopCount(w.datVal) === 1.U, DDRState.WriteData, w.state)
             w.datVal(toBeatNum(io.txdat.bits.DataID)) := true.B
             w.data(toBeatNum(io.txdat.bits.DataID))   := io.txdat.bits.Data
+            w.mask(toBeatNum(io.txdat.bits.DataID))   := mask.asUInt
           }
         }
         is(DDRState.WriteData) {
@@ -173,11 +189,11 @@ class FakeCHISlave(implicit p : Parameters) extends BridgeModule {
   //---------------------------------------------------------------------------------------------------------------------------------//
 
 
-  io.txreq.ready := bufFreeVec.reduce(_|_)
 
   io.txdat.ready := true.B
 
   io.rxrsp.valid       := bufSendDBIDVec.reduce(_|_) | receiptValid
+  io.rxrsp.bits        := DontCare
   io.rxrsp.bits.Opcode := Mux(receiptValid, RSP.ReadReceipt, RSP.CompDBIDResp)
   io.rxrsp.bits.DBID   := selSendDBIDBuf
   io.rxrsp.bits.TxnID  := Mux(receiptValid, readReceipt.TxnID, wrBufRegVec(selSendDBIDBuf).txnid)
@@ -188,4 +204,23 @@ class FakeCHISlave(implicit p : Parameters) extends BridgeModule {
   io.rxdat.bits.DataID := toDataID(sendBeatNumReg)
 
   
+
+  //---------------------------------------------------------------------------------------------------------------------------------//
+  //----------------------------------------------------- Assertion -----------------------------------------------------------------//
+  //---------------------------------------------------------------------------------------------------------------------------------//
+  assert(PopCount(bufWrDataVec) <= 1.U)
+}
+
+object FakeCHISlave extends App {
+  private val config = new Config((_,_,_) => {
+    case ZJParametersKey => ZJParameters()
+    case BridgeParamKey  => BridgeParam()
+  })
+  private val gen = () => new FakeCHISlave()(config)
+  (new ChiselStage).execute(
+    Array("--target", "verilog") ++ args,
+    Seq(
+      FirtoolOption("-O=debug"),
+    ) ++ Seq(ChiselGeneratorAnnotation(gen))
+  )
 }

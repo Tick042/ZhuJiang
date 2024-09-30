@@ -40,6 +40,8 @@ trait BridgeTrait {
     val nrLcredit   = Param.lcreditNum
     val offsetBits  = 6
     val beatNumBits = log2Ceil(nrBeat) 
+    val chiBeatByte = chiBeatBits / 8
+    val axiBeatByte = axiBeatBits / 8
 
 
     def toDataID(x: UInt): UInt = {

@@ -32,3 +32,6 @@ clean:
 	
 axi2chi:
 	mill -i zhujiang.runMain xijiang.bridge.axi2chi.AXI2CHI -td build
+
+fakechislave:
+	mill -i zhujiang.runMain xijiang.bridge.test.FakeCHISlave -td build
