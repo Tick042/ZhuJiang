@@ -35,3 +35,7 @@ axi2chi:
 
 fakechislave:
 	mill -i zhujiang.runMain xijiang.bridge.test.FakeCHISlave -td build
+
+UNAME := Axi
+ut-top:
+	mill -i zhujiang.test.runMain zhujiang.$(UNAME)Top $(RTL_AGRS) -td build/$(UNAME)
