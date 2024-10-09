@@ -6,9 +6,6 @@ import chisel3._
 import chisel3.util._
 import xijiang.bridge.parameter._
 import org.chipsalliance.cde.config._
-import xijiang.bridge.parameter.CHIOp._
-import xijiang.bridge.parameter.BridgeParam
-import xijiang.bridge.parameter.BridgeParamKey
 import xijiang.bridge.Utils.GenerateVerilog
 import _root_.circt.stage.FirtoolOption
 import chisel3.stage.ChiselGeneratorAnnotation
@@ -40,15 +37,21 @@ class FakeCHISlave(implicit p : Parameters) extends BridgeModule {
     //CHI interface
       val txreq = Flipped(DecoupledIO(new ReqFlit))
       val txdat = Flipped(DecoupledIO(new DataFlit))
+      val txrsp = Flipped(Decoupled(new RespFlit))
+
       val rxrsp = DecoupledIO(new RespFlit)
       val rxdat = DecoupledIO(new DataFlit)
+      val rxsnp = DecoupledIO(new SnoopFlit)
 
     })
   //---------------------------------------------------------------------------------------------------------------------------------//
   //-------------------------------------------------- Reg and Wire Define ----------------------------------------------------------//
   //---------------------------------------------------------------------------------------------------------------------------------//
+  io.txrsp <> DontCare
+  io.rxsnp <> DontCare
+
   val mem          = Seq.fill(nrBeat) { Module(new MemHelper()) }
-  val wrBufRegVec  = RegInit(VecInit(Seq.fill(16){0.U.asTypeOf(new DDREntry)}))
+  val wrBufRegVec  = RegInit(VecInit(Seq.fill(nrEntrys){0.U.asTypeOf(new DDREntry)}))
 
   val rDataQueue   = Module(new Queue(Vec(nrBeat, UInt(chiBeatBits.W)), entries = 4, flow = false, pipe = true))
   val rReqQueue    = Module(new Queue(new ReqFlit, entries = 4, flow = false, pipe = true))
@@ -69,9 +72,9 @@ class FakeCHISlave(implicit p : Parameters) extends BridgeModule {
   val receiptGen   = WireInit(rReqQueue.io.deq.fire)
   val readReceipt  = RegInit(0.U.asTypeOf(new RespFlit))
 
-  val dbidValid    = WireInit((io.txreq.bits.Opcode === REQ.WriteUniqueFull || io.txreq.bits.Opcode === REQ.WriteUniquePtl) & io.txreq.fire)
+  val dbidValid    = WireInit((io.txreq.bits.Opcode === ReqOpcode.WriteUniqueFull || io.txreq.bits.Opcode === ReqOpcode.WriteUniquePtl) & io.txreq.fire)
   
-  val sendBeatNumReg = RegInit(0.U(beatNumBits.W))
+  val sendBeatNumReg = RegInit(0.U(log2Ceil(nrBeat).W))
 
   val mask = WireInit(VecInit(Seq.fill(chiBeatByte){0.U(8.W)}))
 
@@ -86,13 +89,13 @@ class FakeCHISlave(implicit p : Parameters) extends BridgeModule {
   when(receiptGen){
     receiptValid := true.B
   }
-  when(io.rxrsp.fire & io.rxrsp.bits.Opcode === RSP.ReadReceipt){
+  when(io.rxrsp.fire & io.rxrsp.bits.Opcode === RspOpcode.ReadReceipt){
     receiptValid := false.B
   }
 
   when(receiptValid){
     readReceipt.TxnID  := io.txreq.bits.TxnID
-    readReceipt.Opcode := RSP.ReadReceipt
+    readReceipt.Opcode := RspOpcode.ReadReceipt
   }
 
 
@@ -120,7 +123,7 @@ class FakeCHISlave(implicit p : Parameters) extends BridgeModule {
   rReqQueue.io.deq.ready  := rDataFlitQ.io.enq.ready
   rDataFlitQ.io.enq.valid := rReqQueue.io.deq.valid
   rDataFlitQ.io.enq.bits  := DontCare
-  rDataFlitQ.io.enq.bits.Opcode := DAT.CompData
+  rDataFlitQ.io.enq.bits.Opcode := DatOpcode.CompData
   rDataFlitQ.io.enq.bits.TxnID  := rReqQueue.io.deq.bits.TxnID
 
   /* 
@@ -163,7 +166,7 @@ class FakeCHISlave(implicit p : Parameters) extends BridgeModule {
           }
         }
         is(DDRState.SendDBIDResp){
-          val hit = io.rxrsp.fire & io.rxrsp.bits.Opcode === RSP.CompDBIDResp & selSendDBIDBuf === i.U
+          val hit = io.rxrsp.fire & io.rxrsp.bits.Opcode === RspOpcode.CompDBIDResp & selSendDBIDBuf === i.U
           when(hit){
             w.state := DDRState.WaitData
           }
@@ -194,7 +197,7 @@ class FakeCHISlave(implicit p : Parameters) extends BridgeModule {
 
   io.rxrsp.valid       := bufSendDBIDVec.reduce(_|_) | receiptValid
   io.rxrsp.bits        := DontCare
-  io.rxrsp.bits.Opcode := Mux(receiptValid, RSP.ReadReceipt, RSP.CompDBIDResp)
+  io.rxrsp.bits.Opcode := Mux(receiptValid, RspOpcode.ReadReceipt, RspOpcode.CompDBIDResp)
   io.rxrsp.bits.DBID   := selSendDBIDBuf
   io.rxrsp.bits.TxnID  := Mux(receiptValid, readReceipt.TxnID, wrBufRegVec(selSendDBIDBuf).txnid)
 
@@ -214,7 +217,6 @@ class FakeCHISlave(implicit p : Parameters) extends BridgeModule {
 object FakeCHISlave extends App {
   private val config = new Config((_,_,_) => {
     case ZJParametersKey => ZJParameters()
-    case BridgeParamKey  => BridgeParam()
   })
   private val gen = () => new FakeCHISlave()(config)
   (new ChiselStage).execute(

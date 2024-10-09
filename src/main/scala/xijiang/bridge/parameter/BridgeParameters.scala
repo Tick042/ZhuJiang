@@ -8,40 +8,33 @@ import freechips.rocketchip.amba.axi4._
 import zhujiang.HasZJParams
 import zhujiang.chi._
 import zhujiang._
+import zhujiang.axi._
 import _root_.xijiang.bridge.parameter
 
-case object BridgeParamKey extends Field[BridgeParam]
 
-
-
-case class BridgeParam(
-                       axiDataBits: Int = 256,
-                       chiBeatBits:  Int = 256,
-                       axiIdBits:   Int = 4,
-                       blockBits:  Int = 512,
-                       addrBits:   Int = 48,
-                       axiBrustPolicy: String = "INCR",
-                       lcreditNum: Int = 16,
-)
-
-
+case object AXIParmKey extends Field[AxiParams]
 
 
 abstract class BridgeBundle(implicit val p: Parameters) extends Bundle with BridgeTrait
 abstract class BridgeModule(implicit val p: Parameters) extends Module with BridgeTrait
 
+
 trait BridgeTrait {
     implicit val p : Parameters
-    val Param = p(BridgeParamKey)
-    val nrBeat = Param.blockBits / Param.chiBeatBits
+    val axiParams   = AxiParams(idBits = 11, dataBits = 256, addrBits = 48)
+    val Param       = p(AXIParmKey)
+    val addrBits    = axiParams.addrBits
     val fakeMemBits = 64
-    val chiBeatBits = Param.chiBeatBits
-    val axiBeatBits = Param.axiDataBits
-    val nrLcredit   = Param.lcreditNum
+    val chiBeatBits = 256
+    val axiBeatBits = axiParams.dataBits
     val offsetBits  = 6
-    val beatNumBits = log2Ceil(nrBeat) 
     val chiBeatByte = chiBeatBits / 8
     val axiBeatByte = axiBeatBits / 8
+    val axiIdBits   = axiParams.idBits
+    val nrEntrys    = 16
+    val nidBits     = 4
+    val sendNumBits = 4
+    val nrBeat      = 2
 
 
     def toDataID(x: UInt): UInt = {
@@ -59,10 +52,10 @@ trait BridgeTrait {
         else { 0.U }
     }
 }
-
-object AXI4Params {
-    def apply()(implicit p : Parameters) = {
-        val Param = p(BridgeParamKey)
-        AXI4BundleParameters(addrBits = Param.addrBits, dataBits = Param.axiDataBits, idBits = Param.axiIdBits)
-    }
+object BurstMode {
+  val width        = 2
+  val Fix          = "b00".U
+  val Incr         = "b01".U
+  val Wrap         = "b10".U
+  val Reserve      = "b11".U
 }
