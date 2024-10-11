@@ -93,6 +93,7 @@ class AXI2CHI(implicit p: Parameters) extends BridgeModule{
 object AXI2CHI extends App {
   private val config = new Config((_,_,_) => {
     case ZJParametersKey => ZJParameters()
+    case AXIParmKey      => AxiParams()
   })
   private val gen = () => new AXI2CHI()(config)
   (new ChiselStage).execute(

@@ -85,85 +85,85 @@ class ReadHandle(implicit p: Parameters) extends BridgeModule{
   //-------------------------------------------------- Reg and Wire Define ----------------------------------------------------------//
   //---------------------------------------------------------------------------------------------------------------------------------//
 
-  val arEntrys          = RegInit(VecInit(Seq.fill(nrEntrys){0.U.asTypeOf(new AREntry)}))
-  val sramSelector      = Module(new SRAMSelector)
-  val readSram          = Module(new SRAMTemplate(gen = UInt(chiBeatBits.W), set = sramEntrys, singlePort = true))
+  // val arEntrys          = RegInit(VecInit(Seq.fill(nrEntrys){0.U.asTypeOf(new AREntry)}))
+  // val sramSelector      = Module(new SRAMSelector)
+  // val readSram          = Module(new SRAMTemplate(gen = UInt(chiBeatBits.W), set = sramEntrys, singlePort = true))
 
-  val sramStateEntrys   = RegInit(VecInit(Seq.fill(nrEntrys){0.U.asTypeOf(new sramStateEntry)}))
-  val sramFreeEntrys    = sramStateEntrys.map(_.state === SRAMState.Free)
+  // val sramStateEntrys   = RegInit(VecInit(Seq.fill(nrEntrys){0.U.asTypeOf(new sramStateEntry)}))
+  // val sramFreeEntrys    = sramStateEntrys.map(_.state === SRAMState.Free)
 
-  val arFreeEntrysVec   = arEntrys.map(_.busy === false.B)
-  val selFreeEntry      = PriorityEncoder(arFreeEntrysVec)
+  // val arFreeEntrysVec   = arEntrys.map(_.busy === false.B)
+  // val selFreeEntry      = PriorityEncoder(arFreeEntrysVec)
 
-  val selBusyEntryVec   = arEntrys.map(_.busy === true.B)
+  // val selBusyEntryVec   = arEntrys.map(_.busy === true.B)
 
-  val nidVec            = arEntrys.map(a => a.arid === io.axi_ar.bits.id & a.busy === true.B)
+  // val nidVec            = arEntrys.map(a => a.arid === io.axi_ar.bits.id & a.busy === true.B)
 
 
   //---------------------------------------------------------------------------------------------------------------------------------//
   //------------------------------------------------------- Logic -------------------------------------------------------------------//
   //---------------------------------------------------------------------------------------------------------------------------------//
-  sramSelector.io.idle := sramFreeEntrys
+  // sramSelector.io.idle := sramFreeEntrys
 
 
-  arEntrys.zipWithIndex.foreach{
-    case(a, i) =>
-      switch(a.busy){
-        is(false.B){
-          val hit = io.axi_ar.fire & selFreeEntry === i.U
-          val nid = PopCount(nidVec)
-          when(hit){
-            a.busy  := true.B
-            a.addr  := io.axi_ar.bits.addr
-            a.arid  := io.axi_ar.bits.id
-            a.len   := io.axi_ar.bits.len
-            a.size  := io.axi_ar.bits.size
-            a.burst := io.axi_ar.bits.burst
-            a.nid   := nid
-            a.sendNum := 0.U
-          }
-        }
-        is(true.B){
-          val rid = io.axi_r.bits.id
-          val endHit = io.axi_r.fire & io.axi_r.bits.last & a.nid === 0.U & a.arid === rid
-          when(endHit){
-            a        := 0.U.asTypeOf(a)
-            a.busy   := false.B
-          }
-          val sendLastReq = (a.sendNum === a.len(7, 1)).asBool
-          val sendHalfReq = a.len(0) === 0.U
-          val shouldSend  = a.len(7, 1) + sendHalfReq.asUInt
-          when(sendLastReq & sendHalfReq){
-            sramStateEntrys(sramSelector.io.out0).state := SRAMState.sendReq
-            sramStateEntrys(sramSelector.io.out0).areid := i.U
-            sramStateEntrys(sramSelector.io.out0).full  := false.B
-            sramStateEntrys(sramSelector.io.out0).num   := a.sendNum
-            a.sendNum                                   := a.sendNum + 1.U
-          }
-          when(a.sendNum < a.len(7, 1)){
-            sramStateEntrys(sramSelector.io.out0).state := SRAMState.sendReq
-            sramStateEntrys(sramSelector.io.out0).areid := i.U
-            sramStateEntrys(sramSelector.io.out0).full  := false.B
-            sramStateEntrys(sramSelector.io.out0).num   := a.sendNum
+  // arEntrys.zipWithIndex.foreach{
+  //   case(a, i) =>
+  //     switch(a.busy){
+  //       is(false.B){
+  //         val hit = io.axi_ar.fire & selFreeEntry === i.U
+  //         val nid = PopCount(nidVec)
+  //         when(hit){
+  //           a.busy  := true.B
+  //           a.addr  := io.axi_ar.bits.addr
+  //           a.arid  := io.axi_ar.bits.id
+  //           a.len   := io.axi_ar.bits.len
+  //           a.size  := io.axi_ar.bits.size
+  //           a.burst := io.axi_ar.bits.burst
+  //           a.nid   := nid
+  //           a.sendNum := 0.U
+  //         }
+  //       }
+  //       is(true.B){
+  //         val rid = io.axi_r.bits.id
+  //         val endHit = io.axi_r.fire & io.axi_r.bits.last & a.nid === 0.U & a.arid === rid
+  //         when(endHit){
+  //           a        := 0.U.asTypeOf(a)
+  //           a.busy   := false.B
+  //         }
+  //         val sendLastReq = (a.sendNum === a.len(7, 1)).asBool
+  //         val sendHalfReq = a.len(0) === 0.U
+  //         val shouldSend  = a.len(7, 1) + sendHalfReq.asUInt
+  //         when(sendLastReq & sendHalfReq){
+  //           sramStateEntrys(sramSelector.io.out0).state := SRAMState.sendReq
+  //           sramStateEntrys(sramSelector.io.out0).areid := i.U
+  //           sramStateEntrys(sramSelector.io.out0).full  := false.B
+  //           sramStateEntrys(sramSelector.io.out0).num   := a.sendNum
+  //           a.sendNum                                   := a.sendNum + 1.U
+  //         }
+  //         when(a.sendNum < a.len(7, 1)){
+  //           sramStateEntrys(sramSelector.io.out0).state := SRAMState.sendReq
+  //           sramStateEntrys(sramSelector.io.out0).areid := i.U
+  //           sramStateEntrys(sramSelector.io.out0).full  := false.B
+  //           sramStateEntrys(sramSelector.io.out0).num   := a.sendNum
 
-            sramStateEntrys(sramSelector.io.out1).state := SRAMState.sendReq
-            sramStateEntrys(sramSelector.io.out1).areid := i.U
-            sramStateEntrys(sramSelector.io.out1).full  := false.B
-            sramStateEntrys(sramSelector.io.out1).num   := a.sendNum
-            
-            a.sendNum                                   := a.sendNum + 1.U
-          }
+  //           sramStateEntrys(sramSelector.io.out1).state := SRAMState.sendReq
+  //           sramStateEntrys(sramSelector.io.out1).areid := i.U
+  //           sramStateEntrys(sramSelector.io.out1).full  := false.B
+  //           sramStateEntrys(sramSelector.io.out1).num   := a.sendNum
+
+  //           a.sendNum                                   := a.sendNum + 1.U
+  //         }
           
-        }
-      }
-    }
+  //       }
+  //     }
+  //   }
   
 
   //---------------------------------------------------------------------------------------------------------------------------------//
   //---------------------------------------------------- IO Interface ---------------------------------------------------------------//
   //---------------------------------------------------------------------------------------------------------------------------------//
 
-  io.axi_ar.ready      := arFreeEntrysVec.reduce(_|_)
+  io.axi_ar.ready      := true.B
 
   
   
