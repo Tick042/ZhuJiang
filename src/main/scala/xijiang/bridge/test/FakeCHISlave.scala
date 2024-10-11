@@ -11,6 +11,7 @@ import _root_.circt.stage.FirtoolOption
 import chisel3.stage.ChiselGeneratorAnnotation
 import _root_.circt.stage._
 
+
 object DDRState {
   val width        = 2
   val Free         = "b00".U

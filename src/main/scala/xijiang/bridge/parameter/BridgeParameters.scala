@@ -35,6 +35,7 @@ trait BridgeTrait {
     val nidBits     = 4
     val sendNumBits = 4
     val nrBeat      = 2
+    val sramEntrys  = 64
 
 
     def toDataID(x: UInt): UInt = {
