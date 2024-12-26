@@ -25,6 +25,7 @@ object MachineState {
   val RECV_DAT     = 7.U(width.W) // CompData
   val RETURN_DAT   = 8.U(width.W) // Return data to TL(AccessAckData)
   val RETURN_ACK   = 9.U(width.W) // Return ack to TL(AccessAck)
+  val WAIT_IDLE    = 10.U(width.W)
 }
 
 class TaskBundle(tlParams: TilelinkParams)(implicit p: Parameters) extends Bundle {
@@ -83,6 +84,13 @@ class TransactionMachine(node: Node, tlParams: TilelinkParams, outstanding: Int)
   private val task = RegInit(0.U.asTypeOf(new TaskBundle(tlParams)))
   private val rspDBID = RegInit(0.U(rxrsp.bits.DBID.getWidth.W))
   private val rspSrcID = RegInit(0.U(niw.W))
+
+  private val alreadyAcked = RegInit(false.B)
+  when(io.tld.fire) {
+    alreadyAcked := true.B
+  }.elsewhen(io.alloc.fire) {
+    alreadyAcked := false.B
+  }
 
   when(io.alloc.fire) {
     task := io.alloc.bits
@@ -159,7 +167,11 @@ class TransactionMachine(node: Node, tlParams: TilelinkParams, outstanding: Int)
 
     is(MachineState.SEND_ACK) {
       when(txrsp.fire) {
-        nextState := MachineState.RETURN_ACK
+        when(alreadyAcked) {
+          nextState := MachineState.IDLE
+        }.otherwise {
+          nextState := MachineState.WAIT_IDLE
+        }
       }
     }
 
@@ -169,8 +181,8 @@ class TransactionMachine(node: Node, tlParams: TilelinkParams, outstanding: Int)
       }
     }
 
-    is(MachineState.RETURN_ACK) {
-      when(io.tld.fire) {
+    is(MachineState.WAIT_IDLE) {
+      when(alreadyAcked) {
         nextState := MachineState.IDLE
       }
     }
@@ -212,11 +224,13 @@ class TransactionMachine(node: Node, tlParams: TilelinkParams, outstanding: Int)
   txrsp.bits.TxnID := rspDBID
   txrsp.bits.Opcode := RspOpcode.CompAck
 
-  io.tld.valid := state === MachineState.RETURN_DAT || state === MachineState.RETURN_ACK
+  val isAccessAckData = state === MachineState.RETURN_DAT
+  val isAccessAck = task.opcode =/= AOpcode.Get && state >= MachineState.SEND_DAT && !alreadyAcked
+  io.tld.valid := isAccessAckData || isAccessAck
   io.tld.bits := DontCare
-  io.tld.bits.data := Mux(state === MachineState.RETURN_DAT, task.data, 0.U)
+  io.tld.bits.data := Mux(isAccessAckData, task.data, 0.U)
   io.tld.bits.corrupt := false.B
-  io.tld.bits.opcode := Mux(state === MachineState.RETURN_DAT, DOpcode.AccessAckData, DOpcode.AccessAck)
+  io.tld.bits.opcode := Mux(isAccessAckData, DOpcode.AccessAckData, DOpcode.AccessAck)
   io.tld.bits.param := DontCare
   io.tld.bits.sink := io.id
   io.tld.bits.source := task.source
