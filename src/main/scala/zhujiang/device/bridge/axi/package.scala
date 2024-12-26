@@ -27,6 +27,7 @@ package object axi {
       rdata := true.B
     }
     def completed: Bool = this.asUInt.andR
+    def issued:Bool = waddr & raddr
     def decode(req: ReqFlit, check: Bool): Unit = {
       when(check) {
         val legalCode = Seq(ReqOpcode.ReadNoSnp, ReqOpcode.WriteNoSnpPtl, ReqOpcode.WriteNoSnpFull, ReqOpcode.WriteNoSnpFullCleanInv)

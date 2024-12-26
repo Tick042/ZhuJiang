@@ -53,6 +53,7 @@ package object bridge {
 
   abstract class DownstreamOpVec(implicit p: Parameters) extends ZJBundle {
     def completed:Bool
+    def issued: Bool
     def decode(req:ReqFlit, check:Bool):Unit
   }
 

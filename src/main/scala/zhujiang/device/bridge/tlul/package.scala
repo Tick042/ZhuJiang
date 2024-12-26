@@ -25,6 +25,7 @@ package object tlul {
       rdata := true.B
     }
     def completed: Bool = this.asUInt.andR
+    def issued: Bool = wreq & rreq
     def decode(req: ReqFlit, check: Bool): Unit = {
       when(check) {
         assert(req.Opcode === ReqOpcode.ReadNoSnp || req.Opcode === ReqOpcode.WriteNoSnpPtl)

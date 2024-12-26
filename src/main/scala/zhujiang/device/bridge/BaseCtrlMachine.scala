@@ -121,7 +121,7 @@ abstract class BaseCtrlMachine[
 
   private val dwt = payload.info.dwt.getOrElse(false.B)
   private val owo = !payload.state.u.compAck
-  private val allowComp = Mux(owo, payload.state.d.completed, Mux(dwt, payload.state.u.wdata, true.B))
+  private val allowComp = Mux(owo, payload.state.d.issued, Mux(dwt, payload.state.u.wdata, true.B))
   private val icnReadReceipt = payload.state.icnReadReceipt
   private val icnDBID = payload.state.icnDBID
   private val icnComp = allowComp && payload.state.icnComp

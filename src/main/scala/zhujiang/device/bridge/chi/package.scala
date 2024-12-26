@@ -33,6 +33,7 @@ package object chi {
       comp := false.B
     }
     def completed: Bool = this.asUInt.andR
+    def issued:Bool = wreq & rreq & receiptResp & dbidResp
     def decode(req: ReqFlit, check: Bool): Unit = {
       when(check) {
         assert(req.Opcode === ReqOpcode.ReadNoSnp || req.Opcode === ReqOpcode.WriteNoSnpPtl)
