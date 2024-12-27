@@ -8,7 +8,6 @@ import org.chipsalliance.cde.config.Parameters
 import xijiang.{Node, NodeType, Ring}
 import dongjiang.pcu._
 import dongjiang.dcu._
-import dongjiang.ddrc._
 import chisel3.util.{Decoupled, DecoupledIO}
 import xijiang.c2c.C2cLinkPort
 import zhujiang.chi.{ChiBuffer, DataFlit, ReqFlit, RespFlit}
