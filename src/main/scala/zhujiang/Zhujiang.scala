@@ -8,11 +8,9 @@ import org.chipsalliance.cde.config.Parameters
 import xijiang.{Node, NodeType, Ring}
 import dongjiang.pcu._
 import dongjiang.dcu._
-import chisel3.util.{Decoupled, DecoupledIO}
-import xijiang.c2c.C2cLinkPort
-import zhujiang.chi.{ChiBuffer, DataFlit, ReqFlit, RespFlit}
-import sifive.enterprise.firrtl.NestedPrefixModulesAnnotation
+import zhujiang.chi.ChiBuffer
 import xijiang.router.base.{DeviceIcnBundle, IcnBundle}
+import xs.utils.debug.HardwareAssertion
 import xs.utils.sram.SramBroadcastBundle
 import xs.utils.{DFTResetSignals, ResetGen}
 import zhujiang.axi.AxiBundle
@@ -134,15 +132,21 @@ class Zhujiang(implicit p: Parameters) extends ZJModule {
     dcuDevSeq(i).reset := placeResetGen(s"dcu_$bankId", dcuIcnSeq(i)._2.head)
     dcuDevSeq(i).clock := clock
     dcuDevSeq(i).suggestName(s"dcu_$bankId")
+    HardwareAssertion.fromDomain(dcuDevSeq(i).assertionOut, dcuDevSeq(i).assertionInfo, level = 0, s"dcu $bankId")
+    HardwareAssertion.placePipe(1)
   }
-
+  private val assertionNode = HardwareAssertion.placePipe(Int.MaxValue)
   val io = IO(new Bundle {
     val ddr = new AxiBundle(memSubSys.io.ddr.params)
     val soc = new SocIcnBundle(socCfgDev.io.icn.node, socDmaDev.io.icn.node)
     val ccn = MixedVec(ccnIcnSeq.map(cc => new CcnIcnBundle(cc.node)))
     val chip = Input(UInt(nodeAidBits.W))
     val onReset = Output(Bool())
+    val assertionOut = Output(assertionNode.assertion.cloneType)
   })
+  dontTouch(io.assertionOut)
+  HardwareAssertion.setTopNode(assertionNode)
+  io.assertionOut := assertionNode.assertion
   io.onReset := resetDev.io.onReset
   io.ddr <> memSubSys.io.ddr
   io.soc.cfg <> socCfgDev.io.async
@@ -158,6 +162,7 @@ class Zhujiang(implicit p: Parameters) extends ZJModule {
       io.ccn(i).reset := ccnSyncDevSeq.get(i).reset
     }
   }
+  HardwareAssertion.release("misc")
 }
 
 class CcnIcnBundle(val node:Node)(implicit p:Parameters) extends Bundle {

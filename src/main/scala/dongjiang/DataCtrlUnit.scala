@@ -16,6 +16,7 @@ import xs.utils.perf.{DebugOptions, DebugOptionsKey, HasPerfLogging}
 import xijiang.router.base.DeviceIcnBundle
 import xs.utils.sram._
 import dongjiang.utils.FastArb._
+import xs.utils.debug.{DomainInfo, HardwareAssertion}
 
 /*
  * Read Req:
@@ -119,8 +120,8 @@ class DataCtrlUnit(nodes: Seq[Node])(implicit p: Parameters) extends DJRawModule
 
   io.icns.zip(rxReqVec).foreach { case(a, b) => a.rx.req.get  <> b }
   io.icns.zip(rxDatVec).foreach { case(a, b) => a.rx.data.get <> b }
-  io.icns.zip(txRspVec).foreach { case(a, b) => a.tx.resp.get <> b}
-  io.icns.zip(txDatVec).foreach { case(a, b) => a.tx.data.get <> b}
+  io.icns.zip(txRspVec).foreach { case(a, b) => a.tx.resp.get <> b }
+  io.icns.zip(txDatVec).foreach { case(a, b) => a.tx.data.get <> b }
 
   rxReq <> Queue(fastArbDec(rxReqVec), 2) // Adding queues for timing considerations
   rxDat <> fastArbDec(rxDatVec)
@@ -130,6 +131,11 @@ class DataCtrlUnit(nodes: Seq[Node])(implicit p: Parameters) extends DJRawModule
   txDatDirVec     := getDCUDirectByTgtID(txDat.bits.TgtID, io.friendsNodeIDVec)
   txRspDirVec     := getDCUDirectByTgtID(txRsp.bits.TgtID, io.friendsNodeIDVec)
 
+  // rxReq
+  val beatOff     = parseDCUAddr(rxReq.bits.Addr)._1
+  HardwareAssertion.withEn(!beatOff, rxReq.bits.Size === chiFullSize.U & rxReq.valid, cf"", rxReq.bits.Addr)
+  HardwareAssertion.withEn(rxReq.bits.Size === chiFullSize.U, isReplace(rxReq.bits.Opcode) & rxReq.valid, cf"", rxReq.bits.Size)
+
   // txDat
   txDatVec.zipWithIndex.foreach {
     case(t, i) =>
@@ -137,8 +143,7 @@ class DataCtrlUnit(nodes: Seq[Node])(implicit p: Parameters) extends DJRawModule
       t.bits      := txDat.bits
   }
   txDat.ready     := txDatVec(OHToUInt(txDatDirVec)).ready
-  assert(PopCount(txDatDirVec) <= 1.U)
-  assert(PopCount(txDatDirVec) === 1.U | !txDat.valid)
+  HardwareAssertion.withEn(PopCount(txDatDirVec) === 1.U, txDat.valid, cf"Illegal TxDat TgtID[${txDat.bits.TgtID}]", txDat.bits.TgtID)
 
   // txRsp
   txRspVec.zipWithIndex.foreach {
@@ -147,8 +152,7 @@ class DataCtrlUnit(nodes: Seq[Node])(implicit p: Parameters) extends DJRawModule
       t.bits      := txRsp.bits
   }
   txRsp.ready     := txRspVec(OHToUInt(txRspDirVec)).ready
-  assert(PopCount(txRspDirVec) <= 1.U)
-  assert(PopCount(txRspDirVec) === 1.U | !txRsp.valid)
+  HardwareAssertion.withEn(PopCount(txRspDirVec) === 1.U, txRsp.valid, cf"Illegal TxRsp TgtID[${txRsp.bits.TgtID}]", txRsp.bits.TgtID)
 
 
   // ReqBuf
@@ -184,7 +188,6 @@ class DataCtrlUnit(nodes: Seq[Node])(implicit p: Parameters) extends DJRawModule
   val reqIsW                = isWriteX(rxReq.bits.Opcode)
   val reqIsRepl             = isReplace(rxReq.bits.Opcode)
   val reqIsFlush            = isFlush(rxReq.bits.Opcode)
-  val beatOff               = parseDCUAddr(rxReq.bits.Addr)._1
   when(reqIsW | reqIsRepl) {
     rxReq.ready             := wBufFreeVec.reduce(_ | _)
   }.otherwise {
@@ -223,8 +226,8 @@ class DataCtrlUnit(nodes: Seq[Node])(implicit p: Parameters) extends DJRawModule
   val sramRead              = willSendRVec.reduce(_ | _)
   val sramRepl              = !sramRead & willSendReplVec.reduce(_ | _)
 
-  val sramRFire             = dsVec.map(_.map(_.io.read.fire).reduce(_ | _)).reduce(_ | _); assert(PopCount(dsVec.map(_.map(_.io.read.fire).reduce(_ | _))) <= 1.U)
-  val sramWFire             = dsVec.map(_.map(_.io.write.fire).reduce(_ | _)).reduce(_ | _); assert(PopCount(dsVec.map(_.map(_.io.write.fire).reduce(_ | _))) <= 1.U)
+  val sramRFire             = dsVec.map(_.map(_.io.read.fire).reduce(_ | _)).reduce(_ | _); HardwareAssertion(PopCount(dsVec.map(_.map(_.io.read.fire).reduce(_ | _))) <= 1.U, cf"")
+  val sramWFire             = dsVec.map(_.map(_.io.write.fire).reduce(_ | _)).reduce(_ | _); HardwareAssertion(PopCount(dsVec.map(_.map(_.io.write.fire).reduce(_ | _))) <= 1.U, cf"")
   dsVec.zipWithIndex.foreach {
     case (ds, i) =>
       ds.zipWithIndex.foreach {
@@ -235,7 +238,7 @@ class DataCtrlUnit(nodes: Seq[Node])(implicit p: Parameters) extends DJRawModule
           d.io.write.bits.index := wBufRegVec(sramWID).dsIndex
           d.io.write.bits.beat  := wBufRegVec(sramWID).beats(j).bits.data
           d.io.write.bits.mask  := wBufRegVec(sramWID).beats(j).bits.mask
-          assert(wBufRegVec(sramWID).beats(j).valid | !d.io.write.valid)
+          HardwareAssertion.withEn(wBufRegVec(sramWID).beats(j).valid, d.io.write.valid, cf"WriteBuffer[${sramWID}] write DataStorage[${i}][${j}] with valid beats")
     }
   }
   dsRespIdPipe.io.enq.valid       := sramRFire
@@ -245,7 +248,7 @@ class DataCtrlUnit(nodes: Seq[Node])(implicit p: Parameters) extends DJRawModule
   /*
     * Get Read CHI Resp
     */
-  rRespQ.io.enq.valid         := sramRFire; assert(Mux(sramRFire, rRespQ.io.enq.ready, true.B))
+  rRespQ.io.enq.valid         := sramRFire; HardwareAssertion.withEn(rRespQ.io.enq.ready, sramRFire, cf"")
   rRespQ.io.enq.bits          := DontCare
   rRespQ.io.enq.bits.Opcode   := Mux(sramRead, rBufRegVec(sramRID).respOpcode,  NonCopyBackWriteData)
   rRespQ.io.enq.bits.TgtID    := Mux(sramRead, rBufRegVec(sramRID).returnNID,   ddrcNodeId.U)
@@ -275,7 +278,6 @@ class DataCtrlUnit(nodes: Seq[Node])(implicit p: Parameters) extends DJRawModule
             r.returnTxnID := rxReq.bits.ReturnTxnID
             r.resp      := rxReq.bits.MemAttr(ChiResp.width - 1, 0)
             r.beatOH    := Mux(rxReq.bits.Size === chiFullSize.U, "b11".U, Cat(beatOff, !beatOff))
-            assert(Mux(rxReq.bits.Size === chiFullSize.U, !beatOff, true.B))
           }
         }
         is(DCURState.ReadSram) {
@@ -304,8 +306,6 @@ class DataCtrlUnit(nodes: Seq[Node])(implicit p: Parameters) extends DJRawModule
             w.srcID     := rxReq.bits.SrcID
             w.txnID     := rxReq.bits.TxnID
             w.beatOH    := Mux(rxReq.bits.Size === chiFullSize.U, "b11".U, Cat(beatOff, !beatOff))
-            assert(Mux(rxReq.bits.Size === chiFullSize.U, !beatOff, true.B))
-            assert(Mux(isReplace(rxReq.bits.Opcode), rxReq.bits.Size === chiFullSize.U, true.B))
           }
         }
         is(DCUWState.SendDBIDResp) {
@@ -316,16 +316,13 @@ class DataCtrlUnit(nodes: Seq[Node])(implicit p: Parameters) extends DJRawModule
         }
         is(DCUWState.WaitData) {
           val hit       = rxDat.fire & rxDat.bits.TxnID === i.U
+          val beatNum   = Mux(w.beatOH === "b10".U, 1.U, toBeatNum(rxDat.bits.DataID))
+          val isLast    = Mux(w.beatOH === "b11".U, PopCount(w.beats.map(_.valid)) === 1.U, true.B)
           when(hit) {
-            val beatNum = Mux(w.beatOH === "b10".U, 1.U, toBeatNum(rxDat.bits.DataID))
-            val isLast  = Mux(w.beatOH === "b11".U, PopCount(w.beats.map(_.valid)) === 1.U, true.B)
-
             w.state     := Mux(hit & isLast, DCUWState.WriteSram, w.state)
             w.beats(beatNum).valid     := true.B
             w.beats(beatNum).bits.data := rxDat.bits.Data
             w.beats(beatNum).bits.mask := rxDat.bits.BE
-
-            assert(!w.beats(beatNum).valid)
           }
         }
         is(DCUWState.WriteSram) {
@@ -344,7 +341,9 @@ class DataCtrlUnit(nodes: Seq[Node])(implicit p: Parameters) extends DJRawModule
       }
   }
   rxDat.ready := true.B
-
+  // HardwareAssertion
+  val beatNum = Mux(wBufRegVec(rxDat.bits.TxnID).beatOH === "b10".U, 1.U, toBeatNum(rxDat.bits.DataID))
+  HardwareAssertion.withEn(!wBufRegVec(rxDat.bits.TxnID).beats(beatNum).valid, rxDat.fire, cf"WriteBuffer[${rxDat.bits.TxnID}] [${beatNum}]", rxDat.bits.TxnID, beatNum)
 
   /*
     * Write Req Buf Replace Read State
@@ -383,10 +382,10 @@ class DataCtrlUnit(nodes: Seq[Node])(implicit p: Parameters) extends DJRawModule
   rDataQ.io.enq.valid       := dsRespIdPipe.io.deq.valid
   rDataQ.io.enq.bits.beats  := dsRespVec(dsRespID).map(_.bits)
   rDataQ.io.enq.bits.beatOH := dsRespOH
-  // assert
-  assert(Mux(dsRespIdPipe.io.deq.valid, PopCount(dsRespVec.map(_.map(_.valid).reduce(_ | _))) === 1.U, PopCount(dsRespVec.map(_.map(_.valid).reduce(_ | _))) === 0.U))
-  assert(Mux(dsRespIdPipe.io.deq.valid, OHToUInt(dsRespVec.map(_.map(_.valid).reduce(_ | _))) === dsRespID, true.B))
-  assert(Mux(dsRespIdPipe.io.deq.valid, Cat(dsRespVec(dsRespID).reverse.map(_.valid)) === dsRespOH, true.B))
+  // HardwareAssertion
+  HardwareAssertion(Mux(dsRespIdPipe.io.deq.valid, PopCount(dsRespVec.map(_.map(_.valid).reduce(_ | _))) === 1.U, PopCount(dsRespVec.map(_.map(_.valid).reduce(_ | _))) === 0.U), cf"")
+  HardwareAssertion.withEn(OHToUInt(dsRespVec.map(_.map(_.valid).reduce(_ | _))) === dsRespID, dsRespIdPipe.io.deq.valid, cf"")
+  HardwareAssertion.withEn(Cat(dsRespVec(dsRespID).map(_.valid).reverse) === dsRespOH, dsRespIdPipe.io.deq.valid, cf"")
 
   /*
     * Send Resp To CHI RxDat
@@ -407,19 +406,42 @@ class DataCtrlUnit(nodes: Seq[Node])(implicit p: Parameters) extends DJRawModule
 
 // ------------------------------------------------------------ Assertion ----------------------------------------------- //
 
-  assert(Mux(rxReq.valid, rxReq.bits.Addr(fullAddrBits - 1, fullAddrBits - sTagBits) === 0.U, true.B))
+  HardwareAssertion.withEn(rxReq.bits.Addr(fullAddrBits - 1, fullAddrBits - sTagBits) === 0.U, rxReq.valid, cf"Illegal DCU address")
 
-  assert(Mux(rDataQ.io.enq.valid, rDataQ.io.enq.ready, true.B))
+  HardwareAssertion.withEn(rDataQ.io.enq.ready, rDataQ.io.enq.valid, cf"rdata queue block [${rDataQ.io.enq.bits.beatOH}]", rDataQ.io.enq.bits.beatOH)
 
-  assert(Mux(rxReq.valid, rxReq.bits.Opcode === ReadNoSnp | rxReq.bits.Opcode === WriteNoSnpFull | rxReq.bits.Opcode === WriteNoSnpPtl | rxReq.bits.Opcode === Replace |  rxReq.bits.Opcode === FlushDCU, true.B))
+  HardwareAssertion.withEn(rxReq.bits.Opcode === ReadNoSnp | rxReq.bits.Opcode === WriteNoSnpFull | rxReq.bits.Opcode === WriteNoSnpPtl | rxReq.bits.Opcode === Replace |  rxReq.bits.Opcode === FlushDCU,
+                           rxReq.valid, cf"Illegal DCU RxReq Opcode[${rxReq.bits.Opcode}]", rxReq.bits.Opcode)
 
+  /*
+   * Read Buffer Timeout Check
+   */
   val rCntReg = RegInit(VecInit(Seq.fill(djparam.nrDCURBuf) { 0.U(64.W) }))
   rCntReg.zip(rBufRegVec).foreach { case (c, r) => c := Mux(r.state === DCURState.Free, 0.U, c + 1.U) }
+  // EDA
   rCntReg.zipWithIndex.foreach { case (c, i) => assert(c < TIMEOUT_DCU_R.U, "DCU ReadBuffer[0x%x] STATE[0x%x] TIMEOUT", i.U, rBufRegVec(i).state) }
+  // Hareware
+  rCntReg.zipWithIndex.foreach { case (c, i) => HardwareAssertion.checkTimeout(c, cf"DCU ReadBuffer[${i}] STATE[${rBufRegVec(i).state}] TIMEOUT", rBufRegVec(i).state) }
 
+  /*
+   * Write Buffer Timeout Check
+   */
   val wCntReg = RegInit(VecInit(Seq.fill(djparam.nrDCUWBuf) { 0.U(64.W) }))
   wCntReg.zip(wBufRegVec).foreach { case (c, w) => c := Mux(w.state === DCUWState.Free, 0.U, c + 1.U) }
+  // EDA
   wCntReg.zipWithIndex.foreach { case (c, i) => assert(c < TIMEOUT_DCU_W.U, "DCU WriteBuffer[0x%x] STATE[0x%x] TIMEOUT", i.U, wBufRegVec(i).state) }
+  // Hareware
+  wCntReg.zipWithIndex.foreach { case (c, i) => HardwareAssertion.checkTimeout(c, cf"DCU WriteBuffer[${i}] STATE[${wBufRegVec(i).state}] TIMEOUT", wBufRegVec(i).state) }
+
+  /*
+   * Hardware Assertion Node And IO
+   */
+  private val assertionNode = HardwareAssertion.placePipe(2, true)
+  @public
+  val assertionOut = IO(Output(assertionNode.assertion.cloneType))
+  @public
+  val assertionInfo = DomainInfo(assertionNode.desc)
+  assertionOut := assertionNode.assertion
 
 // -------------------------------------------------- Perf Counter ------------------------------------------------------ //
   // DCURBuf
