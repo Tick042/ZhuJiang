@@ -313,20 +313,15 @@ local test_put = env.register_test_case "test_put" {
             env.expect_happen_until(10, function () return chi_txreq:fire() and chi_txreq.bits.Opcode:is(OpcodeREQ.WriteNoSnpPtl) and chi_txreq.bits.Order:is(CHIOrder.OWO) end)
                         
             env.negedge(math.random(1, 10))
-                fork {
-                    function ()
-                        -- Send AccessAck once dbidresp is received
-                        env.expect_happen_until(10, function () return tl_d:fire() and tl_d.bits.opcode:is(TLMessageD.AccessAck) end)
-                        env.negedge()
-                        env.expect_not_happen_until(10, function () return tl_d:fire() end)            
-                    end
-                }
                 chi_rxrsp:dbidresp(0, 4) -- txn_id = 0, db_id = 4
             env.expect_happen_until(10, function () return chi_txdat:fire() and chi_txdat.bits.TxnID:is(4) and chi_txdat.bits.BE:is(0xff) end)
                 chi_rxrsp:comp(0, 4) -- txn_id = 0, db_id = 4
             env.expect_happen_until(10, function () return chi_txrsp:fire() and chi_txrsp.bits.Opcode:is(OpcodeRSP.CompAck) and chi_txrsp.bits.TxnID:is(4) end) 
             
-            env.negedge(10)
+            env.expect_happen_until(10, function () return tl_d:fire() and tl_d.bits.opcode:is(TLMessageD.AccessAck) end)
+            env.negedge()
+            env.expect_not_happen_until(10, function () return tl_d:fire() end)
+
             machines[0].io_status_state:expect(0)
 
             env.negedge(100)
@@ -341,20 +336,15 @@ local test_put = env.register_test_case "test_put" {
             env.expect_happen_until(10, function () return chi_txreq:fire() and chi_txreq.bits.Opcode:is(OpcodeREQ.WriteNoSnpPtl) and chi_txreq.bits.Order:is_not(0) end)
                         
             env.negedge(math.random(1, 10))
-                fork {
-                    function ()
-                        -- Send AccessAck once dbidresp is received
-                        env.expect_happen_until(10, function () return tl_d:fire() and tl_d.bits.opcode:is(TLMessageD.AccessAck) end)
-                        env.negedge()
-                        env.expect_not_happen_until(10, function () return tl_d:fire() end)            
-                    end
-                }
                 chi_rxrsp:dbidresp(0, 4) -- txn_id = 0, db_id = 4
             env.expect_happen_until(10, function () return chi_txdat:fire() and chi_txdat.bits.TxnID:is(4) and chi_txdat.bits.BE:is(0xAA) end)
                 chi_rxrsp:comp(0, 4) -- txn_id = 0, db_id = 4
             env.expect_happen_until(10, function () return chi_txrsp:fire() and chi_txrsp.bits.Opcode:is(OpcodeRSP.CompAck) and chi_txrsp.bits.TxnID:is(4) end) 
             
-            env.negedge(10)
+            env.expect_happen_until(10, function () return tl_d:fire() and tl_d.bits.opcode:is(TLMessageD.AccessAck) end)
+            env.negedge()
+            env.expect_not_happen_until(10, function () return tl_d:fire() end)
+
             machines[0].io_status_state:expect(0)
 
             env.negedge(100)
@@ -425,7 +415,6 @@ local test_put = env.register_test_case "test_put" {
             env.negedge(); machineHandler.issueReqPtr:expect(0)
             check_no_req()
             chi_rxrsp:dbidresp(0, 4) -- txn_id = 0, db_id = 4
-            env.expect_happen_until(10, function () return tl_d:fire() and tl_d.bits.opcode:is(TLMessageD.AccessAck) and tl_d.bits.sink:is(0) end)
 
             check_req(1)
             env.negedge(); machineHandler.issueReqPtr:expect(1)
@@ -433,19 +422,20 @@ local test_put = env.register_test_case "test_put" {
 
             chi_txreq.ready:set(0)
             chi_rxrsp:dbidresp(1, 5) -- txn_id = 1, db_id = 5
-            env.expect_happen_until(10, function () return tl_d:fire() and tl_d.bits.opcode:is(TLMessageD.AccessAck) end)
 
             env.negedge(100)
             
             machineHandler.issueAckPtr:expect(0)
             chi_rxrsp:comp(0, 4)
             check_ack(4)
+            env.expect_happen_until(10, function () return tl_d:fire() and tl_d.bits.opcode:is(TLMessageD.AccessAck) and tl_d.bits.sink:is(0) end)
             env.negedge()
                 machines[0].io_status_state:expect(0)
             
             machineHandler.issueAckPtr:expect(1)
             chi_rxrsp:comp(1, 5)
             check_ack(5)
+            env.expect_happen_until(10, function () return tl_d:fire() and tl_d.bits.opcode:is(TLMessageD.AccessAck) end)
             env.negedge()
                 machines[1].io_status_state:expect(0)
 
@@ -461,15 +451,11 @@ local test_put = env.register_test_case "test_put" {
 
                 function ()
                     for i = 2, 15 do
-                        fork {
-                            function ()
-                                env.expect_happen_until(10, function () return tl_d:fire() and tl_d.bits.sink:is(i) end)
-                            end
-                        }
                         chi_rxrsp:dbidresp(i, 5 + i) -- txn_id = 1, db_id = 5 + i
                         env.expect_happen_until(10, function () return chi_txdat:fire() and chi_txdat.bits.TxnID:is(5 + i) and chi_txdat.bits.Data:get()[1] == data_vec[i + 1] end)
                         chi_rxrsp:comp(i, 5 + i)
                         
+                        env.expect_happen_until(10, function () return tl_d:fire() and tl_d.bits.sink:is(i) end)
                         env.negedge()
                             machines[i].io_status_state:expect(0)
                     end
@@ -477,32 +463,6 @@ local test_put = env.register_test_case "test_put" {
             }
 
             env.negedge(100)
-        end
-
-        -- Wait IDLE
-        do
-            tl_d.ready:set(0)
-
-            env.negedge()
-                tl_a:putfull(0x1000, 0, "0xdead")
-
-            env.negedge(math.random(1, 10))
-                fork {
-                    function ()
-                        env.expect_not_happen_until(10, function () return tl_d:fire() end)            
-                    end
-                }
-                chi_rxrsp:dbidresp(0, 4) -- txn_id = 0, db_id = 4
-            env.expect_happen_until(10, function () return chi_txdat:fire() and chi_txdat.bits.TxnID:is(4) and chi_txdat.bits.BE:is(0xff) end)
-                chi_rxrsp:comp(0, 4) -- txn_id = 0, db_id = 4
-            env.expect_happen_until(10, function () return chi_txrsp:fire() and chi_txrsp.bits.Opcode:is(OpcodeRSP.CompAck) and chi_txrsp.bits.TxnID:is(4) end) 
-            
-            env.negedge(10)
-            machines[0].io_status_state:expect(10)
-            tl_d.ready:set(1)
-
-            env.negedge(2)
-            machines[0].io_status_state:expect(0)
         end
     end
 }
@@ -533,16 +493,12 @@ local test_mix_get_put = env.register_test_case "test_mix_get_put" {
             env.negedge()
                 machines[0].io_status_state:expect(0)
 
-            fork {
-                function ()
-                    env.expect_happen_until(10, function () return tl_d:fire() and tl_d.bits.sink:is(1) end)
-                end
-            }
             chi_rxrsp:dbidresp(1, 0) -- txn_id = 1, db_id = 0
             env.expect_happen_until(10, function () return chi_txdat:fire() and chi_txdat.bits.Opcode:is(OpcodeDAT.NonCopyBackWrData) and chi_txdat.bits.Data:get()[1] == 0xdead and chi_txdat.bits.BE:is(0xFF) end)
 
             chi_rxrsp:comp(1, 0) -- txn_id = 1, db_id = 0
             env.expect_happen_until(10, function () return chi_txrsp:fire() and chi_txrsp.bits.Opcode:is(OpcodeRSP.CompAck) end)
+            env.expect_happen_until(10, function () return tl_d:fire() and tl_d.bits.sink:is(1) end)
             env.negedge()
                 machines[1].io_status_state:expect(0)
             
@@ -563,11 +519,6 @@ local test_mix_get_put = env.register_test_case "test_mix_get_put" {
             env.negedge()
             env.expect_not_happen_until(10, function () return chi_txreq:fire() end)
 
-            fork {
-                function ()
-                    env.expect_happen_until(10, function () return tl_d:fire() and tl_d.bits.sink:is(0) end)
-                end
-            }
             chi_rxrsp:dbidresp(0, 0) -- txn_id = 0, db_id = 0
 
             fork {
@@ -576,6 +527,7 @@ local test_mix_get_put = env.register_test_case "test_mix_get_put" {
 
                     chi_rxrsp:comp(0, 0) -- txn_id = 0, db_id = 0
                     env.expect_happen_until(10, function () return chi_txrsp:fire() and chi_txrsp.bits.Opcode:is(OpcodeRSP.CompAck) end)
+                    env.expect_happen_until(10, function () return tl_d:fire() and tl_d.bits.sink:is(0) end)
                     env.negedge()
                         machines[0].io_status_state:expect(0)
                 end,
