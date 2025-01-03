@@ -44,7 +44,7 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
 
 // --------------------- Modules declaration ------------------------//
   val taskQ   = Module(new Queue(new PipeTaskBundle(), entries = djparam.nrPipeTaskQueue, pipe = false, flow = false))
-  val dirResQ = Module(new Queue(new DirRespBundle(), entries = djparam.nrPipeTaskQueue + 2, pipe = false, flow = false)) // one for mp_s1 read Dir before send task to mp_2, one for mp_s3
+  val dirResQ = Module(new Queue(new DirRespBundle(), entries = djparam.nrPipeTaskQueue + 1, pipe = false, flow = false)) // Add one for mp_s1 read Dir before send task to mp_2
 
   dontTouch(taskQ.io.count)
   dontTouch(dirResQ.io.count)
@@ -613,7 +613,7 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
 
 
 // ---------------------------------------------------------------------------------------------------------------------- //
-// ------------------------ S3_Execute: Execute specific tasks value based on decode results -----------------------------//
+// ------------------------ S4_Execute: Execute specific tasks value based on decode results -----------------------------//
 // ---------------------------------------------------------------------------------------------------------------------- //
   /*
    * Send Req to Node
@@ -687,7 +687,7 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
 
 
 // ---------------------------------------------------------------------------------------------------------------------- //
-// ------------------------------------------- S3_Execute: UnLock MshrLockVec ------------------------------------------- //
+// ------------------------------------------- S4_Execute: UnLock MshrLockVec ------------------------------------------- //
 // ---------------------------------------------------------------------------------------------------------------------- //
   /*
    * Update MshrLockVec:
