@@ -14,23 +14,30 @@ import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config._
 import xs.utils.perf.{DebugOptions, DebugOptionsKey, HasPerfLogging}
+import MSHRStateOH._
 
 
-object MSHRState {
+object MSHRStateOH {
   // [free] ---> [beSend] ---> [alreadySend] ---> [waitResp] ---> [beSend] ---> [free]
   // [free] ---> [beSend] ---> [alreadySend] ---> [free]
-  val width       = 2
-  val Free        = "b00".U
-  val BeSend      = "b01".U
-  val AlreadySend = "b10".U
-  val WaitResp    = "b11".U
+  val width       = 4
+
+  val FREE        = "b0001".U
+  val BESEND      = "b0010".U
+  val ALREADYSEND = "b0100".U
+  val WAITRESP    = "b1000".U
+
+  val Free        = 0
+  val BeSend      = 1
+  val AlreadySend = 2
+  val WaitResp    = 3
 }
 
 
 class MSHREntry(implicit p: Parameters) extends DJBundle {
   // mshrMes
   val mshrMes         = new Bundle {
-    val state         = UInt(MSHRState.width.W)
+    val state         = UInt(MSHRStateOH.width.W)
     val mTag          = UInt(mshrTagBits.W)
     val needUpdLock   = Bool() // Need to update lock vec when it will be free
     val unLock        = Bool() // Calculate unLock signal one cycle ahead for timing
@@ -42,11 +49,11 @@ class MSHREntry(implicit p: Parameters) extends DJBundle {
   // resp mes
   val respMes         = new ExuRespMesBundle()
 
-  def isValid         = mshrMes.state =/= MSHRState.Free
-  def isFree          = mshrMes.state === MSHRState.Free
-  def isBeSend        = mshrMes.state === MSHRState.BeSend
-  def isAlreadySend   = mshrMes.state === MSHRState.AlreadySend
-  def isWaitResp      = mshrMes.state === MSHRState.WaitResp
+  def isValid         = !mshrMes.state(Free)
+  def isFree          = mshrMes.state(Free)
+  def isBeSend        = mshrMes.state(BeSend)
+  def isAlreadySend   = mshrMes.state(AlreadySend)
+  def isWaitResp      = mshrMes.state(WaitResp)
   def isResp          = respMes.slvResp.valid | respMes.mstResp.valid | respMes.fwdState.valid
   def isReq           = !isResp
   def respBeSend      = mshrMes.unLock & isBeSend & isResp
@@ -91,8 +98,10 @@ class MSHRCtl()(implicit p: Parameters) extends DJModule with HasPerfLogging {
   val reqAck_s0_q           = Module(new Queue(new ReqAck2IntfBundle(), entries = nrBankPerPCU, flow = false, pipe = true))
 
   // --------------------- Reg / Wire declaration ------------------------ //
-  // mshrTable
-  val mshrTableReg          = RegInit(VecInit(Seq.fill(djparam.nrMSHRSets) { VecInit(Seq.fill(djparam.nrMSHRWays) { 0.U.asTypeOf(new MSHREntry()) }) }))
+  // MSHR Init
+  val mshrInit              = WireInit(0.U.asTypeOf(new MSHREntry())); mshrInit.mshrMes.state := FREE
+  // MSHR Table
+  val mshrTableReg          = RegInit(VecInit(Seq.fill(djparam.nrMSHRSets) { VecInit(Seq.fill(djparam.nrMSHRWays) { mshrInit }) }))
   val mshrLockVecNext       = Wire(Vec(nrMinDirSet, Bool())) // TODO: 2048 is so big
   val mshrLockVecReg        = RegNext(mshrLockVecNext)
   val mshrUnlockVec         = WireInit(VecInit(Seq.fill(nrMinDirSet) { false.B }))
@@ -296,43 +305,39 @@ class MSHRCtl()(implicit p: Parameters) extends DJModule with HasPerfLogging {
     case (m, i) =>
       m.zipWithIndex.foreach {
         case (m, j) =>
-          val nextState     = WireInit(0.U.asTypeOf(UInt(MSHRState.width.W)))
+          val nextState     = WireInit(0.U.asTypeOf(UInt(MSHRStateOH.width.W)))
           m.mshrMes.state   := nextState
-          switch(m.mshrMes.state) {
-            // Free
-            is(MSHRState.Free) {
-              val nodeHit     = io.req2Exu.valid & canReceiveReq & i.U === req2ExuMSet & j.U === nodeReqInvWay
-              nextState := Mux(nodeHit, MSHRState.BeSend, MSHRState.Free)
-            }
+          assert(PopCount(m.mshrMes.state) === 1.U)
+          // Free
+          when(m.isFree) {
+            val nodeHit     = io.req2Exu.valid & canReceiveReq & i.U === req2ExuMSet & j.U === nodeReqInvWay
+            nextState := Mux(nodeHit, BESEND, FREE)
             // BeSend
-            is(MSHRState.BeSend) {
-              val reqhit      = taskReq_s0.valid & canGoReq_s0 & taskReq_s0.bits.mshrMatch(i, j)
-              val resphit     = taskResp_s0.valid & canGoResp_s0 & taskResp_s0.bits.mshrMatch(i, j)
-              nextState := Mux(reqhit | resphit, MSHRState.AlreadySend, MSHRState.BeSend)
-            }
-            // AlreadySend
-            is(MSHRState.AlreadySend) {
-              val hit         = io.updMSHR.valid & io.updMSHR.bits.mshrMatch(i, j)
-              val retry       = hit & io.updMSHR.bits.isRetry
-              val update      = hit & io.updMSHR.bits.isUpdate
-              val clean       = hit & io.updMSHR.bits.isClean
-              nextState := Mux(retry, MSHRState.BeSend,
-                Mux(update, MSHRState.WaitResp,
-                  Mux(clean, MSHRState.Free, MSHRState.AlreadySend)))
-            }
-            // WaitResp
-            is(MSHRState.WaitResp) {
-              val hit         = m.noWaitIntf
-              val noResp      = m.respMes.noRespValid
-              nextState       := Mux(hit, Mux(noResp, MSHRState.Free, MSHRState.BeSend), MSHRState.WaitResp)
-              assert(Mux(m.respMes.fwdState.valid, m.respMes.slvResp.valid, true.B))
-              // willBeFree
-              val willBeFree  = nextState === MSHRState.Free
-              when(willBeFree & m.mshrMes.needUpdLock) { mshrUnlockVec(m.minDirSet(i.U)) := true.B }
-            }
+          }.elsewhen(m.isBeSend) {
+            val reqhit      = taskReq_s0.valid & canGoReq_s0 & taskReq_s0.bits.mshrMatch(i, j)
+            val resphit     = taskResp_s0.valid & canGoResp_s0 & taskResp_s0.bits.mshrMatch(i, j)
+            nextState := Mux(reqhit | resphit, ALREADYSEND, BESEND)
+          // AlreadySend
+          }.elsewhen(m.isAlreadySend) {
+            val hit         = io.updMSHR.valid & io.updMSHR.bits.mshrMatch(i, j)
+            val retry       = hit & io.updMSHR.bits.isRetry
+            val update      = hit & io.updMSHR.bits.isUpdate
+            val clean       = hit & io.updMSHR.bits.isClean
+            nextState := Mux(retry, BESEND,
+                           Mux(update, WAITRESP,
+                             Mux(clean, FREE, ALREADYSEND)))
+          // WaitResp
+          }.elsewhen(m.isWaitResp) {
+            val hit         = m.noWaitIntf
+            val noResp      = m.respMes.noRespValid
+            nextState       := Mux(hit, Mux(noResp, FREE, BESEND), WAITRESP)
+            assert(Mux(m.respMes.fwdState.valid, m.respMes.slvResp.valid, true.B))
+            // willBeFree
+            val willBeFree  = nextState(Free)
+            when(willBeFree & m.mshrMes.needUpdLock) { mshrUnlockVec(m.minDirSet(i.U)) := true.B }
           }
           // willBeSend
-          val willBeSend = nextState === MSHRState.BeSend
+          val willBeSend    = nextState(BeSend)
           when(willBeSend) { m.mshrMes.unLock := !mshrLockVecNext(Mux(m.isFree, mshrAlloc_s0.minDirSet(i.U), m.minDirSet(i.U))) }
       }
   }
