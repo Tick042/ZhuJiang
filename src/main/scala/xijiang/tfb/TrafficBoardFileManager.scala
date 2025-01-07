@@ -4,7 +4,7 @@ import org.chipsalliance.cde.config.Parameters
 import xijiang.{Node, NodeType}
 import xs.utils.FileRegisters
 import zhujiang.ZJParametersKey
-import zhujiang.chi.{ChannelEncodings, ReqFlit}
+import zhujiang.chi.{ChannelEncodings, DataFlit, ReqFlit}
 
 case class TrafficBoardParams(
   timeOut: Int = 500
@@ -75,6 +75,7 @@ object TrafficBoardFileManager {
       |""".stripMargin
 
   def source(p: Parameters) = {
+    val maxFlitSize = new DataFlit()(p).getWidth
     val params = p(ZJParametersKey)
     s"""
        |#include "svdpi.h"
@@ -89,12 +90,12 @@ object TrafficBoardFileManager {
        |#include <sstream>
        |#include <iomanip>
        |
-       |#define FLIT_SIZE ${params.maxFlitBits}
+       |#define FLIT_SIZE $maxFlitSize
        |#define TIME_OUT ${params.tfbParams.get.timeOut}
        |#define NODE_NID_BITS ${params.nodeNidBits}
        |#define NODE_AID_BITS ${params.nodeAidBits}
        |#define NODE_NET_BITS ${params.nodeNetBits}
-       |#define FLIT_BUF_SIZE ${(params.maxFlitBits + 7) / 8}
+       |#define FLIT_BUF_SIZE ${(maxFlitSize + 7) / 8}
        |
        |$allNodeTypeDefs
        |

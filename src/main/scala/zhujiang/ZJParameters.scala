@@ -239,11 +239,6 @@ case class ZJParameters(
   } else {
     681
   }
-  lazy val reqFlitBits = 3 * (nodeIdBits - 7) + 88 + requestAddrBits + Y + M + PB + S + E.max(R)
-  lazy val respFlitBits = 2 * (nodeIdBits - 7) + 65
-  lazy val snoopFlitBits = 3 * (nodeIdBits - 7) + 59 + snoopAddrBits + M + E
-  lazy val dataFlitBits = 3 * (nodeIdBits - 7) + dwb + Y + dataCheckBits + poisonBits
-  lazy val maxFlitBits = Seq(reqFlitBits, respFlitBits, snoopFlitBits, dataFlitBits).max
   require(nodeIdBits >= 7 && nodeIdBits <= 11)
 
   ZhujiangGlobal.initialize(nodeNidBits, nodeAidBits, localNodeParams, csnNodeParams, requestAddrBits, cpuSpaceBits)
