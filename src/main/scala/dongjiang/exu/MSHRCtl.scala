@@ -15,7 +15,7 @@ import chisel3.util._
 import org.chipsalliance.cde.config._
 import xs.utils.perf.{DebugOptions, DebugOptionsKey, HasPerfLogging}
 import MSHRStateOH._
-
+import math._
 
 object MSHRStateOH {
   // [free] ---> [beSend] ---> [alreadySend] ---> [waitResp] ---> [beSend] ---> [free]
@@ -39,9 +39,9 @@ class MSHREntry(implicit p: Parameters) extends DJBundle {
   val mshrMes         = new Bundle {
     val state         = UInt(MSHRStateOH.width.W)
     val mTag          = UInt(mshrTagBits.W)
-    val needUpdLock   = Bool() // Need to update lock vec when it will be free
-    val unLock        = Bool() // Calculate unLock signal one cycle ahead for timing
     val waitIntfVec   = Vec(nrIntf, Bool()) // Wait Snoop Resp or Req Resp
+    val selfLock      = Bool()
+    val othLock       = Bool()
   }
   // req mes
   val chiMes          = new ExuChiMesBundle()
@@ -56,8 +56,8 @@ class MSHREntry(implicit p: Parameters) extends DJBundle {
   def isWaitResp      = mshrMes.state(WaitResp)
   def isResp          = respMes.slvResp.valid | respMes.mstResp.valid | respMes.fwdState.valid
   def isReq           = !isResp
-  def respBeSend      = mshrMes.unLock & isBeSend & isResp
-  def reqBeSend       = mshrMes.unLock & isBeSend & isReq
+  def respBeSend      = !mshrMes.othLock & isBeSend & isResp
+  def reqBeSend       = !mshrMes.othLock & isBeSend & isReq
   def noWaitIntf      = !mshrMes.waitIntfVec.reduce(_ | _)
 
   def useAddr   (x: UInt): UInt = { Cat(mshrMes.mTag, x.asTypeOf(UInt(mshrSetBits.W))) }
@@ -82,7 +82,7 @@ class MSHRCtl()(implicit p: Parameters) extends DJModule with HasPerfLogging {
     val pipeTask      = Vec(2, Decoupled(new PipeTaskBundle()))
     // Update Task From MainPipe
     val updMSHR       = Flipped(Decoupled(new UpdateMSHRReqBundle()))
-    val updLockMSHR   = Vec(2, Flipped(Valid(UInt(minDirSetBits.W))))
+    val updMSHRLock   = Vec(2, Flipped(Valid(new MSHRIndexBundle())))
     // Directory Read Req
     val dirRReadyVec  = Input(Vec(djparam.nrDirBank, Bool()))
     val dirRead       = Vec(2, Valid(new DirReadBundle()))
@@ -102,9 +102,7 @@ class MSHRCtl()(implicit p: Parameters) extends DJModule with HasPerfLogging {
   val mshrInit              = WireInit(0.U.asTypeOf(new MSHREntry())); mshrInit.mshrMes.state := FREE
   // MSHR Table
   val mshrTableReg          = RegInit(VecInit(Seq.fill(djparam.nrMSHRSets) { VecInit(Seq.fill(djparam.nrMSHRWays) { mshrInit }) }))
-  val mshrLockVecNext       = Wire(Vec(nrMinDirSet, Bool())) // TODO: 2048 is so big
-  val mshrLockVecReg        = RegNext(mshrLockVecNext)
-  val mshrUnlockVec         = WireInit(VecInit(Seq.fill(nrMinDirSet) { false.B }))
+  val mshrNSTable           = Wire(Vec(djparam.nrMSHRSets, Vec(djparam.nrMSHRWays, UInt(MSHRStateOH.width.W)))) // Next State Table
   // Transfer Req From Node To MSHREntry
   val mshrAlloc_s0          = WireInit(0.U.asTypeOf(new MSHREntry()))
   // task s0
@@ -142,13 +140,14 @@ class MSHRCtl()(implicit p: Parameters) extends DJModule with HasPerfLogging {
   val req2ExuMSet     = io.req2Exu.bits.pcuMes.mSet; dontTouch(req2ExuMSet)
   val req2ExuDirSet   = io.req2Exu.bits.pcuMes.minDirSet; dontTouch(req2ExuDirSet)
   val nodeReqMatchVec = mshrTableReg(req2ExuMSet).map { case m => m.isValid & m.mshrMes.mTag === io.req2Exu.bits.pcuMes.mTag }
+  val lockMatchVec    = mshrTableReg(req2ExuMSet).map { case m => m.isValid & m.minDirSet(req2ExuMSet) === io.req2Exu.bits.pcuMes.minDirSet & m.mshrMes.selfLock }
   val nodeReqInvVec   = mshrTableReg(req2ExuMSet).map(_.isFree)
   val nodeReqInvWay   = PriorityEncoder(nodeReqInvVec)
 
   /*
    * Get Block Message
    */
-  val canReceiveReq   = !nodeReqMatchVec.reduce(_ | _) & PopCount(nodeReqInvVec) > 0.U
+  val canReceiveReq   = !nodeReqMatchVec.reduce(_ | _) & !lockMatchVec.reduce(_ | _) & PopCount(nodeReqInvVec) > 0.U
 
 
   /*
@@ -194,9 +193,9 @@ class MSHRCtl()(implicit p: Parameters) extends DJModule with HasPerfLogging {
     case(m, i) =>
       m.zipWithIndex.foreach {
         case(m, j) =>
-          val updMSHRHit  = io.updMSHR.fire & !io.updMSHR.bits.isRetry & io.updMSHR.bits.mshrMatch(i, j)
+          val updMSHRHit  = io.updMSHR.fire  & !io.updMSHR.bits.isRetry & io.updMSHR.bits.mshrMatch(i, j)
           val resp2ExuHit = io.resp2Exu.fire & io.resp2Exu.bits.pcuIndex.mshrMatch(i, j)
-          val req2ExuHit  = io.req2Exu.fire & canReceiveReq & i.U === req2ExuMSet & j.U === nodeReqInvWay
+          val req2ExuHit  = io.req2Exu.fire  & canReceiveReq & i.U === req2ExuMSet & j.U === nodeReqInvWay
           assert(PopCount(Seq(updMSHRHit, resp2ExuHit, req2ExuHit)) <= 1.U)
           /*
            * Pipe Update mshrTable value
@@ -208,7 +207,6 @@ class MSHRCtl()(implicit p: Parameters) extends DJModule with HasPerfLogging {
               m.chiMes.opcode       := io.updMSHR.bits.opcode
               m.chiMes.channel      := io.updMSHR.bits.channel
               m.mshrMes.mTag        := io.updMSHR.bits.mTag
-              m.mshrMes.needUpdLock := io.updMSHR.bits.needUpdLock
             }
             // req or update
             m.respMes               := 0.U.asTypeOf(m.respMes)
@@ -224,7 +222,7 @@ class MSHRCtl()(implicit p: Parameters) extends DJModule with HasPerfLogging {
             // Record Resp Mes
             when(io.resp2Exu.bits.pcuMes.isCompAck) {
               // Only use in DMT
-              // Nothing to do and it has been receicve master resp
+              // Nothing to do and it has been receive master resp
               assert(PopCount(m.mshrMes.waitIntfVec) === 1.U, s"MSHR[0x%x][0x%x] ADDR[0x%x] CHANNEL[0x%x] OP[0x%x] STATE[0x%x]", i.U, j.U, m.fullAddr(i.U, io.dcuID, io.pcuID), m.chiMes.channel, m.chiMes.opcode, m.mshrMes.state)
               assert(m.respMes.mstResp.valid, s"MSHR[0x%x][0x%x] ADDR[0x%x] CHANNEL[0x%x] OP[0x%x] STATE[0x%x]", i.U, j.U, m.fullAddr(i.U, io.dcuID, io.pcuID), m.chiMes.channel, m.chiMes.opcode, m.mshrMes.state)
             }
@@ -272,27 +270,46 @@ class MSHRCtl()(implicit p: Parameters) extends DJModule with HasPerfLogging {
   }
 
 
-  /*
-   * Update Lock Vec
-   */
-  mshrLockVecNext.zipWithIndex.foreach {
-    case(lock, i) =>
-      when(mshrUnlockVec(i)) {
-        lock := false.B
-        assert(mshrLockVecReg(i), "lock[0x%x]", i.U)
+
+  // ---------------------------------------------------------------------------------------------------------------------- //
+  // --------------------------------------------- S0: Update MHSR Table Lock --------------------------------------------- //
+  // ---------------------------------------------------------------------------------------------------------------------- //
+  mshrTableReg.zip(mshrNSTable).zipWithIndex.foreach {
+    case ((mVec, ns), i) =>
+      mVec.zip(ns).zipWithIndex.foreach {
+        case ((m, ns), j) =>
+          /*
+           * Set othLock
+           */
+          // Free ---> BeSend
+          when(m.isFree & ns(BeSend)) {
+            val lockSrcVec      = mVec.map { case a => a.mshrMes.selfLock & a.minDirSet(i.U) === mshrAlloc_s0.minDirSet(i.U) }; assert(PopCount(lockSrcVec) <= 1.U, s"MSHR[${i}][${j}]")
+            m.mshrMes.othLock   := lockSrcVec.reduce(_ | _)
+          // BeSend/WaitResp ---> BeSend
+          }.elsewhen((m.isBeSend | m.isWaitResp) & ns(BeSend)) {
+            val lockSrcVec      = mVec.map { case a => a.mshrMes.selfLock & a.minDirSet(i.U) === m.minDirSet(i.U) }; assert(PopCount(lockSrcVec) <= 1.U, s"MSHR[${i}][${j}]")
+            m.mshrMes.othLock   := lockSrcVec.reduce(_ | _)
+          }
+          /*
+           * Set selfLock
+           */
+          // BeSend ---> AlreadySend
+          when(m.isBeSend & ns(AlreadySend)) {
+            m.mshrMes.selfLock  := true.B
+            assert(!m.mshrMes.selfLock, s"MSHR[${i}][${j}]")
+          // WaitResp/AlreadySend ---> Free
+          }.elsewhen((m.isAlreadySend | m.isWaitResp) & ns(Free)) {
+            m.mshrMes.selfLock  := false.B
+            assert(Mux(m.isAlreadySend, m.mshrMes.selfLock, m.mshrMes.selfLock | m.chiMes.opcode =/= Replace), s"MSHR[${i}][${j}]")
+          // Set by ProcessPipe
+          }.elsewhen((io.updMSHRLock(PipeID.RESP).valid & io.updMSHRLock(PipeID.RESP).bits.mshrMatch(i, j)) |
+                     (io.updMSHRLock(PipeID.REQ).valid  & io.updMSHRLock(PipeID.REQ).bits.mshrMatch(i, j))) {
+            m.mshrMes.selfLock  := false.B
+            assert(m.mshrMes.selfLock, s"MSHR[${i}][${j}]")
+          }
       }
-      .elsewhen((io.updLockMSHR(0).valid & io.updLockMSHR(0).bits === i.U) | (io.updLockMSHR(1).valid & io.updLockMSHR(1).bits === i.U)) {
-        lock := false.B
-        assert(mshrLockVecReg(i), "lock[0x%x]", i.U)
-      }.elsewhen((taskReq_s0.valid  & canGoReq_s0  & taskReq_s0.bits.taskMes.readDir  & taskReq_s0.bits.taskMes.minDirSet === i.U) |   // Req Fire
-                 (taskResp_s0.valid & canGoResp_s0 & taskResp_s0.bits.taskMes.readDir & taskResp_s0.bits.taskMes.minDirSet === i.U)) { // Resp Fire
-        lock := true.B
-        assert(!mshrLockVecReg(i), "lock[0x%x]", i.U)
-      }.otherwise {
-        lock := mshrLockVecReg(i)
-      }
-      assert(PopCount(Seq(io.updLockMSHR(0).valid & io.updLockMSHR(0).bits === i.U, io.updLockMSHR(1).valid & io.updLockMSHR(1).bits === i.U, mshrUnlockVec(i))) <= 1.U, "lock[0x%x]", i.U)
   }
+
 
 
   // ---------------------------------------------------------------------------------------------------------------------- //
@@ -305,40 +322,36 @@ class MSHRCtl()(implicit p: Parameters) extends DJModule with HasPerfLogging {
     case (m, i) =>
       m.zipWithIndex.foreach {
         case (m, j) =>
-          val nextState     = WireInit(0.U.asTypeOf(UInt(MSHRStateOH.width.W)))
-          m.mshrMes.state   := nextState
-          assert(PopCount(m.mshrMes.state) === 1.U)
+          val nextState     = mshrNSTable(i)(j)
           // Free
           when(m.isFree) {
             val nodeHit     = io.req2Exu.valid & canReceiveReq & i.U === req2ExuMSet & j.U === nodeReqInvWay
-            nextState := Mux(nodeHit, BESEND, FREE)
+            nextState       := Mux(nodeHit, BESEND, FREE)
             // BeSend
           }.elsewhen(m.isBeSend) {
             val reqhit      = taskReq_s0.valid & canGoReq_s0 & taskReq_s0.bits.mshrMatch(i, j)
             val resphit     = taskResp_s0.valid & canGoResp_s0 & taskResp_s0.bits.mshrMatch(i, j)
-            nextState := Mux(reqhit | resphit, ALREADYSEND, BESEND)
+            nextState       := Mux(reqhit | resphit, ALREADYSEND, BESEND)
           // AlreadySend
           }.elsewhen(m.isAlreadySend) {
             val hit         = io.updMSHR.valid & io.updMSHR.bits.mshrMatch(i, j)
             val retry       = hit & io.updMSHR.bits.isRetry
             val update      = hit & io.updMSHR.bits.isUpdate
             val clean       = hit & io.updMSHR.bits.isClean
-            nextState := Mux(retry, BESEND,
-                           Mux(update, WAITRESP,
-                             Mux(clean, FREE, ALREADYSEND)))
+            nextState       := Mux(retry, BESEND,
+                                 Mux(update, WAITRESP,
+                                   Mux(clean, FREE, ALREADYSEND)))
           // WaitResp
           }.elsewhen(m.isWaitResp) {
             val hit         = m.noWaitIntf
             val noResp      = m.respMes.noRespValid
             nextState       := Mux(hit, Mux(noResp, FREE, BESEND), WAITRESP)
             assert(Mux(m.respMes.fwdState.valid, m.respMes.slvResp.valid, true.B))
-            // willBeFree
-            val willBeFree  = nextState(Free)
-            when(willBeFree & m.mshrMes.needUpdLock) { mshrUnlockVec(m.minDirSet(i.U)) := true.B }
+          }.otherwise {
+            nextState       := m.mshrMes.state
           }
-          // willBeSend
-          val willBeSend    = nextState(BeSend)
-          when(willBeSend) { m.mshrMes.unLock := !mshrLockVecNext(Mux(m.isFree, mshrAlloc_s0.minDirSet(i.U), m.minDirSet(i.U))) }
+          m.mshrMes.state   := nextState
+          assert(PopCount(m.mshrMes.state) === 1.U)
       }
   }
 
@@ -349,8 +362,8 @@ class MSHRCtl()(implicit p: Parameters) extends DJModule with HasPerfLogging {
    * Get Can Send Set From Dir Read Ready and mshrLockVecReg
    */
   // TODO: if dont need to read Dir, it should not be ctrl by mshrLockVecReg
-  mshrTableReg.zip(reqWillSendVecVec).zipWithIndex.foreach  { case((m, v), i) => m.zip(v).foreach { case(m, v) => v := m.reqBeSend  & io.dirRReadyVec(m.dirBank(i.U)); assert(Mux(v, !mshrLockVecReg(m.minDirSet(i.U)), true.B)) } }
-  mshrTableReg.zip(respWillSendVecVec).zipWithIndex.foreach { case((m, v), i) => m.zip(v).foreach { case(m, v) => v := m.respBeSend & io.dirRReadyVec(m.dirBank(i.U)); assert(Mux(v, !mshrLockVecReg(m.minDirSet(i.U)), true.B)) } }
+  mshrTableReg.zip(reqWillSendVecVec).zipWithIndex.foreach  { case((m, v), i) => m.zip(v).foreach { case(m, v) => v := m.reqBeSend  & io.dirRReadyVec(m.dirBank(i.U)) } }
+  mshrTableReg.zip(respWillSendVecVec).zipWithIndex.foreach { case((m, v), i) => m.zip(v).foreach { case(m, v) => v := m.respBeSend & io.dirRReadyVec(m.dirBank(i.U)) } }
 
 
   /*
@@ -388,7 +401,8 @@ class MSHRCtl()(implicit p: Parameters) extends DJModule with HasPerfLogging {
   /*
    * Select req task_s0
    */
-  taskReq_s0.valid                  := taskReqValid & !(taskResp_s0.valid & taskResp_s0.bits.taskMes.dirBank === taskReq_s0.bits.taskMes.dirBank)
+  val blockTaskReq_s0               = taskResp_s0.valid & taskResp_s0.bits.taskMes.dirBank === taskReq_s0.bits.taskMes.dirBank
+  taskReq_s0.valid                  := taskReqValid & !blockTaskReq_s0
   taskReq_s0.bits.chiMes            := mshrReq.chiMes
   taskReq_s0.bits.chiIndex          := mshrReq.chiIndex
   taskReq_s0.bits.respMes           := mshrReq.respMes
@@ -466,12 +480,6 @@ class MSHRCtl()(implicit p: Parameters) extends DJModule with HasPerfLogging {
   val cntMSHRReg = RegInit(VecInit(Seq.fill(djparam.nrMSHRSets) { VecInit(Seq.fill(djparam.nrMSHRWays) { 0.U(64.W) }) }))
   cntMSHRReg.zipWithIndex.foreach { case (c0, i) => c0.zipWithIndex.foreach { case(c1, j) => c1 := Mux(mshrTableReg(i)(j).isFree, 0.U, c1 + 1.U)  } }
   cntMSHRReg.zipWithIndex.foreach { case (c0, i) => c0.zipWithIndex.foreach { case(c1, j) => assert(c1 < TIMEOUT_MSHR.U, "MSHR[0x%x][0x%x] ADDR[0x%x] CHANNEL[0x%x] OP[0x%x] STATE[0x%x] TIMEOUT", i.U, j.U, mshrTableReg(i)(j).fullAddr(i.U, io.dcuID, io.pcuID), mshrTableReg(i)(j).chiMes.channel, mshrTableReg(i)(j).chiMes.opcode, mshrTableReg(i)(j).mshrMes.state) } }
-
-  // MSHRLock Timeout Check
-  val cntLockReg = RegInit(VecInit(Seq.fill(djparam.nrMSHRSets) { 0.U(64.W) }))
-  cntLockReg.zipWithIndex.foreach { case(c, i) => c := Mux(!mshrLockVecReg(i), 0.U , c + 1.U) }
-  cntLockReg.zipWithIndex.foreach { case(c, i) => assert(c < TIMEOUT_MSLOCK.U, "MSHR LOCK [0x%x] TIMEOUT", i.U) }
-
 
 // -------------------------------------------------- Perf Counter ------------------------------------------------------ //
   require(djparam.nrMSHRWays >= 4 & djparam.nrMSHRWays % 4 == 0)

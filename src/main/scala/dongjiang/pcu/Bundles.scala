@@ -51,6 +51,8 @@ trait HasMSHRWay extends DJBundle { this: Bundle => val mshrWay = UInt(mshrWayBi
 
 trait HasMHSRIndex extends DJBundle with HasMSHRSet with HasMSHRWay { def mshrMatch(set: Int, way: Int): Bool = mshrSet === set.U & mshrWay === way.U }
 
+class MSHRIndexBundle(implicit p: Parameters) extends DJBundle with HasMHSRIndex
+
 object PipeID { val width = 1; val RESP = "b0".U; val REQ = "b1".U }
 
 trait HasPipeID extends Bundle { this: Bundle => val pipeID = UInt(PipeID.width.W); def toReqPipe = pipeID === PipeID.REQ; def toRespPipe = pipeID === PipeID.RESP }

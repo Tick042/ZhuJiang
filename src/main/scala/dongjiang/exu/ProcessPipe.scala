@@ -32,7 +32,7 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
     val task        = Flipped(Decoupled(new PipeTaskBundle()))
     // Update Task To MSHR
     val updMSHR     = Decoupled(new UpdateMSHRReqBundle())
-    val updLockMSHR = Valid(UInt(minDirSetBits.W))
+    val updMSHRLock = Valid(new MSHRIndexBundle())
     // Req To Node
     val req2Intf    = Decoupled(new Req2IntfBundle())
     // Resp To Node
@@ -84,7 +84,7 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
     val decode            = new DecodeBundle()
     val snpNodeVec        = Vec(nrCcNode, Bool())
     val dirRes            = new DirRespBundle()
-    val needUnLockMSHR    = Bool()
+    val updMSHRLock       = Bool()
     val respType          = UInt(RespType.width.W)
     val srcMetaID         = UInt((metaIdBits+1).W)
     val todo_replace      = Bool()
@@ -114,8 +114,8 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
   val todo_s4             = WireInit(0.U.asTypeOf(new OperationsBundle())); dontTouch(todo_s4)
   // s4 execute signals: Execute specific tasks
   val done_s4_g           = RegInit(0.U.asTypeOf(new OperationsBundle()))
-  val done_s4_g_replace   = RegInit(false.B)
   val done_s4_g_sfEvict   = RegInit(false.B)
+  val done_s4_g_updLock   = RegInit(false.B)
   val reqBeSend_s4        = Wire(Vec(7, new Req2IntfBundle()))
 
 
@@ -329,7 +329,6 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
   io.updMSHR.bits.hasNewReq   := todo_s3_replace | todo_s3_sfEvict
   io.updMSHR.bits.opcode      := Mux(todo_s3_replace, Replace,            SnpUniqueEvict)
   io.updMSHR.bits.channel     := Mux(todo_s3_replace, CHIChannel.REQ,     CHIChannel.SNP)
-  io.updMSHR.bits.needUpdLock := todo_s3_replace
   // Common
   io.updMSHR.valid            := valid_s3 & (todo_s3_retry | todo_s3_updateMSHR | todo_s3_cleanMSHR) & !done_s3_g_updMSHR
   done_s3_g_updMSHR           := Mux(s2Fire, false.B, done_s3_g_updMSHR | io.updMSHR.fire)
@@ -350,7 +349,7 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
   s3.todo_sfEvict   := todo_s3_sfEvict
   s3.respType       := inst_s3.respType
   s3.srcMetaID      := srcMetaID_s3
-  s3.needUnLockMSHR := task_s3.bits.taskMes.readDir & !io.updMSHR.bits.needUpdLock
+  s3.updMSHRLock    := task_s3.bits.taskMes.readDir & !todo_s3_replace & io.updMSHR.bits.isUpdate
 
   /*
   * S4 base ctrl logic
@@ -360,17 +359,17 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
 
   switch(Cat(valid_s4_temp_g, valid_s4_g)) {
     is("b00".U) {
-      //                 | valid                           | bits
+      // valid                                | bits
       valid_s4_temp_g := false.B;             s4_temp_g := DontCare
       valid_s4_g      := s3Fire;              s4_g      := s3
     }
     is("b01".U) {
-      //                 | valid                           | bits
+      // valid                                | bits
       valid_s4_temp_g := s3Fire & !canGo_s4;  s4_temp_g := s3
       valid_s4_g      := s3Fire | !canGo_s4;  s4_g      := Mux(s4Fire, s3, s4_g) // bypass s4_temp
     }
     is("b11".U) {
-      //                 | valid                           | bits
+      // valid                                | bits
       valid_s4_temp_g := s3Fire | !s4Fire;    s4_temp_g := Mux(s3Fire, s3, s4_temp_g)
       valid_s4_g      := true.B;              s4_g      := Mux(s4Fire, s4_temp_g, s4_g)
     }
@@ -682,19 +681,19 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
    * Set Can Go S3 Value
    */
   canGo_s4              := valid_s4_g & reqDone & dirDone & rcDBDone & comDone
-
-
+  dontTouch(reqDone)
+  dontTouch(dirDone)
+  dontTouch(rcDBDone)
+  dontTouch(comDone)
 
 
 // ---------------------------------------------------------------------------------------------------------------------- //
 // ------------------------------------------- S4_Execute: UnLock MshrLockVec ------------------------------------------- //
 // ---------------------------------------------------------------------------------------------------------------------- //
-  /*
-   * Update MshrLockVec:
-   * 1. S3 done but task dont need to commit
-   */
-  io.updLockMSHR.valid  := valid_s4_g & canGo_s4 & s4_g.needUnLockMSHR
-  io.updLockMSHR.bits   := s4_g.task.taskMes.minDirSet
+  done_s4_g_updLock           := Mux(s4Fire, false.B, done_s4_g_updLock | io.updMSHRLock.valid)
+  io.updMSHRLock.valid        := valid_s4_g & dirDone & s4_g.updMSHRLock & !done_s4_g_updLock
+  io.updMSHRLock.bits.mshrSet := s4_g.task.taskMes.mSet
+  io.updMSHRLock.bits.mshrWay := s4_g.task.taskMes.mshrWay
 
 
 // ----------------------------------------------------- Assertion ------------------------------------------------------ //

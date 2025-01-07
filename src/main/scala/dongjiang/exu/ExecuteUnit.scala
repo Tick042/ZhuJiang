@@ -47,8 +47,8 @@ class ExecuteUnit(implicit p: Parameters) extends DJModule {
   mshrCtl.io.pipeTask(PipeID.RESP)    <> respPipe.io.task;  assert(!mshrCtl.io.pipeTask(PipeID.RESP).valid | mshrCtl.io.pipeTask(PipeID.RESP).bits.taskMes.pipeID === PipeID.RESP)
   mshrCtl.io.pipeTask(PipeID.REQ)     <> reqPipe.io.task;   assert(!mshrCtl.io.pipeTask(PipeID.REQ).valid  | mshrCtl.io.pipeTask(PipeID.REQ).bits.taskMes.pipeID === PipeID.REQ)
   mshrCtl.io.updMSHR                  <> fastPriorityArbDec(Seq(respPipe.io.updMSHR, reqPipe.io.updMSHR))
-  mshrCtl.io.updLockMSHR(PipeID.RESP) <> respPipe.io.updLockMSHR
-  mshrCtl.io.updLockMSHR(PipeID.REQ)  <> reqPipe.io.updLockMSHR
+  mshrCtl.io.updMSHRLock(PipeID.RESP) <> respPipe.io.updMSHRLock
+  mshrCtl.io.updMSHRLock(PipeID.REQ)  <> reqPipe.io.updMSHRLock
 
 
   mshrCtl.io.pcuID          := io.pcuID
