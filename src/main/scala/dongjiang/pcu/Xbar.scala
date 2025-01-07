@@ -69,23 +69,23 @@ class Xbar()(implicit p: Parameters) extends DJModule {
   }
 
   // There is a lot of room for optimization of the connection
-  interConnect(in = io.req2Exu.in,                  out = io.req2Exu.out, q0 = 2, q0_pipe = false) // Adding queues for timing considerations
+  interConnect(in = io.req2Exu.in,                  out = io.req2Exu.out, q0 = 2, q0_pipe = false) // Adding queue for timing considerations
 
   interConnect(in = io.reqAck2Intf.in,              out = io.reqAck2Intf.out)
 
-  interConnect(in = io.resp2Intf.in,                out = io.resp2Intf.out, q0 = 2, q0_pipe = false) // Adding queues for timing considerations
+  interConnect(in = io.resp2Intf.in,                out = io.resp2Intf.out, q0 = 2, q0_pipe = false) // Adding queue for timing considerations
 
-  interConnect(in = io.req2Intf.in,                 out = io.req2Intf.out, q0 = 2, q0_pipe = false) // Adding queues for timing considerations
+  interConnect(in = io.req2Intf.in,                 out = io.req2Intf.out, q0 = 2, q0_pipe = false) // Adding queue for timing considerations
 
   interConnect(in = io.resp2Exu.in,                 out = io.resp2Exu.out)
 
-  io.dbSigs.out(0).dbRCReq                          <> Queue(fastArbDec(io.dbSigs.in0), entries = 2) // Adding queues for timing considerations
+  io.dbSigs.out(0).dbRCReq                          <> Queue(fastArbDec(io.dbSigs.in0), entries = 2) // Adding queue for timing considerations
 
   io.dbSigs.out(0).getDBID                          <> fastArbDec(io.dbSigs.in1.map(_.getDBID))
 
   interConnect(in = io.dbSigs.out.map(_.dbidResp),  out = io.dbSigs.in1.map(_.dbidResp))
 
-  interConnect(in = io.dbSigs.out.map(_.dataFDB),   out = io.dbSigs.in1.map(_.dataFDB)) // Dont add queues for timing considerations because it has been add queue in DataBuffer
+  interConnect(in = io.dbSigs.out.map(_.dataFDB),   out = io.dbSigs.in1.map(_.dataFDB)) // Dont add queue for timing considerations because it has been add queue in DataBuffer
 
   io.dbSigs.out(0).dataTDB                          <> fastArbDec(io.dbSigs.in1.map(_.dataTDB))
 

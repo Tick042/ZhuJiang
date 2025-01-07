@@ -60,7 +60,7 @@ class DirectoryBase(
 
   val rCtrlPipe       = Module(new Pipe(new DirCtrlBundle(), latency = setup + latency - 1))
 
-  val writeQ          = Module(new Queue(new DirWriteBaseBundle(ways, nrMetas, replWayBits), entries = 2, pipe = true, flow = true))
+  val writeQ          = Module(new Queue(new DirWriteBaseBundle(ways, nrMetas, replWayBits), entries = 4, pipe = false, flow = false)) // Adding queue for timing considerations TODO: Finding a suitable entry number
 
   val updReplQOpt     = if(!useRepl) None else Some(Module(new Queue(new Bundle { val set = UInt(setBits.W); val way = UInt(wayBits.W); val replMes = UInt(repl.nBits.W) }, entries = 2, pipe = true, flow = true)))
 

@@ -108,6 +108,8 @@ class MSHRCtl()(implicit p: Parameters) extends DJModule with HasPerfLogging {
   // task s0
   val reqWillSendVecVec     = Wire(Vec(djparam.nrMSHRSets, Vec(djparam.nrMSHRWays, Bool())))
   val respWillSendVecVec    = Wire(Vec(djparam.nrMSHRSets, Vec(djparam.nrMSHRWays, Bool())))
+  val reqWillSendWayVec     = Wire(Vec(djparam.nrMSHRSets, UInt(mshrWayBits.W)))
+  val respWillSendWayVec    = Wire(Vec(djparam.nrMSHRSets, UInt(mshrWayBits.W)))
   val taskReq_s0            = Wire(Valid(new PipeTaskBundle()))
   val canGoReq_s0           = Wire(Bool())
   val taskResp_s0           = Wire(Valid(new PipeTaskBundle()))
@@ -365,12 +367,14 @@ class MSHRCtl()(implicit p: Parameters) extends DJModule with HasPerfLogging {
   mshrTableReg.zip(reqWillSendVecVec).zipWithIndex.foreach  { case((m, v), i) => m.zip(v).foreach { case(m, v) => v := m.reqBeSend  & io.dirRReadyVec(m.dirBank(i.U)) } }
   mshrTableReg.zip(respWillSendVecVec).zipWithIndex.foreach { case((m, v), i) => m.zip(v).foreach { case(m, v) => v := m.respBeSend & io.dirRReadyVec(m.dirBank(i.U)) } }
 
+  respWillSendWayVec.zip(respWillSendVecVec).foreach { case(a, b) => a := StepRREncoder(b, canGoResp_s0) }
+  reqWillSendWayVec.zip(reqWillSendVecVec).foreach   { case(a, b) => a := StepRREncoder(b, canGoReq_s0)  }
 
   /*
    * Get task_s0(resp) from MSHRTable
    */
   val respSendSet         = StepRREncoder(respWillSendVecVec.map(_.reduce(_ | _)), canGoResp_s0); dontTouch(respSendSet)
-  val respSendWay         = StepRREncoder(respWillSendVecVec(respSendSet), canGoResp_s0); dontTouch(respSendWay)
+  val respSendWay         = WireInit(respWillSendWayVec(respSendSet)); dontTouch(respSendWay)
   val mshrResp            = mshrTableReg(respSendSet)(respSendWay)
   val taskRespValid       = respWillSendVecVec.map(_.reduce(_ | _)).reduce(_ | _)
 
@@ -379,7 +383,7 @@ class MSHRCtl()(implicit p: Parameters) extends DJModule with HasPerfLogging {
    * Get task_s0(req) from MSHRTable
    */
   val reqSendSet          = StepRREncoder(reqWillSendVecVec.map(_.reduce(_ | _)), canGoReq_s0); dontTouch(reqSendSet)
-  val reqSendWay          = StepRREncoder(reqWillSendVecVec(reqSendSet), canGoReq_s0); dontTouch(reqSendWay)
+  val reqSendWay          = WireInit(reqWillSendWayVec(reqSendSet)); dontTouch(reqSendWay)
   val mshrReq             = mshrTableReg(reqSendSet)(reqSendWay)
   val taskReqValid        = reqWillSendVecVec.map(_.reduce(_ | _)).reduce(_ | _)
 
