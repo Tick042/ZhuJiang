@@ -11,7 +11,7 @@ class TrafficGen(node: Node)(implicit p: Parameters) extends ZJModule {
   private val csnStr = if(node.csnNode) "CSN" else "LOC"
   override val desiredName = s"TrafficGen$csnStr${node.nodeStr}"
   val nodeId = IO(Input(UInt(niw.W)))
-  val icn = IO(Flipped(new IcnBundle(node)))
+  val icn = IO(Flipped(new IcnBundle(node, true)))
 
   private def generate(chn: String): Unit = {
     val txp = icn.rx.getBundle(chn)
@@ -23,7 +23,7 @@ class TrafficGen(node: Node)(implicit p: Parameters) extends ZJModule {
       txGen.io.nodeId := nodeId
       txGen.io.chn := ChannelEncodings.encodingsMap(chn).U
       txGen.io.clock := clock
-      txGen.io.reset := reset
+      txGen.io.reset := !icn.resetState.get.reduce(_ | _)
     }
     val rxp = icn.tx.getBundle(chn)
     if(rxp.isDefined) {
@@ -34,9 +34,10 @@ class TrafficGen(node: Node)(implicit p: Parameters) extends ZJModule {
       rxGen.io.nodeId := nodeId
       rxGen.io.chn := ChannelEncodings.encodingsMap(chn).U
       rxGen.io.clock := clock
-      rxGen.io.reset := reset
+      rxGen.io.reset := !icn.resetState.get.reduce(_ | _)
     }
   }
+  icn.resetInject.foreach(_ := DontCare)
   generate("REQ")
   generate("RSP")
   generate("DAT")

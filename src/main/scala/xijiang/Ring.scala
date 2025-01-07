@@ -7,6 +7,7 @@ import zhujiang.{ZJBundle, ZJModule, ZJParametersKey}
 import xijiang.tfs._
 import xs.utils.{DFTResetSignals, ResetGen}
 import zhujiang.chi.NodeIdBundle
+import zhujiang.device.reset.ResetDevice
 
 class TfsIO(local: Boolean)(implicit p: Parameters) extends ZJBundle {
   private val ring = if(local) p(ZJParametersKey).localRing else p(ZJParametersKey).csnRing
@@ -55,6 +56,13 @@ class Ring(local: Boolean)(implicit p: Parameters) extends ZJModule {
         r.router.c2cIds.get.zip(c2cRoutersAndNodes).foreach({ case (r, (c, _)) => r := c.router.nodeId.asTypeOf(new NodeIdBundle) })
       }
       m.suggestName(s"${n.routerStr}TrafficGen")
+      if(n.defaultHni) {
+        val resetDev = Module(new ResetDevice)
+        resetDev.clock := clock
+        resetDev.reset := reset
+        r.icn.resetInject.get := resetDev.io.resetInject
+        resetDev.io.resetState := r.icn.resetState.get
+      }
       (None, n)
     } else {
       val port = IO(new IcnBundle(n, true)(p))
