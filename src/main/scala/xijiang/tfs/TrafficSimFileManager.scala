@@ -89,14 +89,12 @@ object TrafficSimFileManager {
        |#define NODE_AID_BITS ${params.nodeAidBits}
        |#define NODE_NID_BITS ${params.nodeNidBits}
        |#define NODE_ID_BITS ${params.nodeIdBits}
-       |#define TGT_ID_OFF 4
+       |#define TGT_ID_OFF 0
        |#define SRC_ID_OFF (TGT_ID_OFF + NODE_ID_BITS)
        |
        |#define RX_READY_MAX_DELAY ${params.tfsParams.get.rxReadyMaxDelay}
        |#define TX_VALID_MAX_DELAY ${params.tfsParams.get.txValidMaxDelay}
        |
-       |#define TGT_ID_OFF 4
-       |#define SRC_ID_OFF (TGT_ID_OFF + NODE_ID_BITS)
        |#define TXN_ID_BITS 12
        |#define TXN_ID_OFF (4 + NODE_ID_BITS + NODE_ID_BITS)
        |

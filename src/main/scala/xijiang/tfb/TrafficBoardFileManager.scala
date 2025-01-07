@@ -4,7 +4,7 @@ import org.chipsalliance.cde.config.Parameters
 import xijiang.{Node, NodeType}
 import xs.utils.FileRegisters
 import zhujiang.ZJParametersKey
-import zhujiang.chi.ChannelEncodings
+import zhujiang.chi.{ChannelEncodings, ReqFlit}
 
 case class TrafficBoardParams(
   timeOut: Int = 500
@@ -109,7 +109,7 @@ object TrafficBoardFileManager {
        |
        |#define NODE_AID_BITS ${params.nodeAidBits}
        |#define NODE_ID_BITS ${params.nodeIdBits}
-       |#define TGT_ID_OFF 4
+       |#define TGT_ID_OFF 0
        |#define SRC_ID_OFF (TGT_ID_OFF + NODE_ID_BITS)
        |
        |#define TFB_ERR(...)                  \\
