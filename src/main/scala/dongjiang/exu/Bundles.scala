@@ -47,6 +47,7 @@ class UpdateMSHRReqBundle(implicit p: Parameters) extends DJBundle with HasMHSRI
     val hasNewReq   = Bool()
     val mTag        = UInt(mshrTagBits.W)
     val opcode      = UInt(7.W)
+    val unlock      = Bool()
 
     def isRetry     = updType === UpdMSHRType.RETRY
     def isUpdate    = updType === UpdMSHRType.UPD & waitIntfVec.reduce(_ | _)

@@ -81,8 +81,7 @@ class MSHRCtl()(implicit p: Parameters) extends DJModule with HasPerfLogging {
     // Task To MainPipe
     val pipeTask      = Vec(2, Decoupled(new PipeTaskBundle()))
     // Update Task From MainPipe
-    val updMSHR       = Flipped(Decoupled(new UpdateMSHRReqBundle()))
-    val updMSHRLock   = Vec(2, Flipped(Valid(new MSHRIndexBundle())))
+    val updMSHRVec    = Vec(2, Flipped(Decoupled(new UpdateMSHRReqBundle())))
     // Directory Read Req
     val dirRReadyVec  = Input(Vec(djparam.nrDirBank, Bool()))
     val dirRead       = Vec(2, Valid(new DirReadBundle()))
@@ -175,13 +174,8 @@ class MSHRCtl()(implicit p: Parameters) extends DJModule with HasPerfLogging {
   reqAck_s0_q.io.enq.bits.to      := io.req2Exu.bits.from
   reqAck_s0_q.io.enq.bits.entryID := io.req2Exu.bits.pcuIndex.entryID
   io.reqAck2Intf                  <> reqAck_s0_q.io.deq
+  io.req2Exu.ready                  := reqAck_s0_q.io.enq.ready
 
-  /*
-   * Set ready value
-   */
-  io.updMSHR.ready  := true.B
-  io.resp2Exu.ready := true.B
-  io.req2Exu.ready  := reqAck_s0_q.io.enq.ready
 
   assert(Mux(io.resp2Exu.valid, mshrTableReg(io.resp2Exu.bits.pcuIndex.mshrSet)(io.resp2Exu.bits.pcuIndex.mshrWay).isWaitResp, true.B))
 
@@ -195,24 +189,28 @@ class MSHRCtl()(implicit p: Parameters) extends DJModule with HasPerfLogging {
     case(m, i) =>
       m.zipWithIndex.foreach {
         case(m, j) =>
-          val updMSHRHit  = io.updMSHR.fire  & !io.updMSHR.bits.isRetry & io.updMSHR.bits.mshrMatch(i, j)
-          val resp2ExuHit = io.resp2Exu.fire & io.resp2Exu.bits.pcuIndex.mshrMatch(i, j)
-          val req2ExuHit  = io.req2Exu.fire  & canReceiveReq & i.U === req2ExuMSet & j.U === nodeReqInvWay
-          assert(PopCount(Seq(updMSHRHit, resp2ExuHit, req2ExuHit)) <= 1.U)
+          val respPipeUpdMSHRHit  = io.updMSHRVec(PipeID.RESP).fire & !io.updMSHRVec(PipeID.RESP).bits.isRetry & io.updMSHRVec(PipeID.RESP).bits.mshrMatch(i, j)
+          val reqPipeUpdMSHRHit   = io.updMSHRVec(PipeID.REQ).fire  & !io.updMSHRVec(PipeID.REQ).bits.isRetry  & io.updMSHRVec(PipeID.REQ).bits.mshrMatch(i, j)
+          val updMSHRHit          = respPipeUpdMSHRHit | reqPipeUpdMSHRHit
+          val updMSHRBits         = Mux(respPipeUpdMSHRHit, io.updMSHRVec(PipeID.RESP).bits, io.updMSHRVec(PipeID.REQ).bits)
+          val resp2ExuHit         = io.resp2Exu.fire & io.resp2Exu.bits.pcuIndex.mshrMatch(i, j)
+          val req2ExuHit          = io.req2Exu.fire  & canReceiveReq & i.U === req2ExuMSet & j.U === nodeReqInvWay
+          assert(PopCount(Seq(respPipeUpdMSHRHit, reqPipeUpdMSHRHit, resp2ExuHit, req2ExuHit)) <= 1.U)
+
           /*
            * Pipe Update mshrTable value
            */
           when(updMSHRHit) {
             // req
-            when(io.updMSHR.bits.hasNewReq) {
+            when(updMSHRBits.hasNewReq) {
               m                     := 0.U.asTypeOf(m)
-              m.chiMes.opcode       := io.updMSHR.bits.opcode
-              m.chiMes.channel      := io.updMSHR.bits.channel
-              m.mshrMes.mTag        := io.updMSHR.bits.mTag
+              m.chiMes.opcode       := updMSHRBits.opcode
+              m.chiMes.channel      := updMSHRBits.channel
+              m.mshrMes.mTag        := updMSHRBits.mTag
             }
             // req or update
             m.respMes               := 0.U.asTypeOf(m.respMes)
-            m.mshrMes.waitIntfVec   := io.updMSHR.bits.waitIntfVec
+            m.mshrMes.waitIntfVec   := updMSHRBits.waitIntfVec
             assert(PopCount(m.mshrMes.waitIntfVec) === 0.U, s"MSHR[0x%x][0x%x] ADDR[0x%x] CHANNEL[0x%x] OP[0x%x] STATE[0x%x]", i.U, j.U, m.fullAddr(i.U, io.dcuID, io.pcuID), m.chiMes.channel, m.chiMes.opcode, m.mshrMes.state)
             assert(m.isAlreadySend, s"MSHR[0x%x][0x%x] ADDR[0x%x] CHANNEL[0x%x] OP[0x%x] STATE[0x%x]", i.U, j.U, m.fullAddr(i.U, io.dcuID, io.pcuID), m.chiMes.channel, m.chiMes.opcode, m.mshrMes.state)
             /*
@@ -271,6 +269,12 @@ class MSHRCtl()(implicit p: Parameters) extends DJModule with HasPerfLogging {
       }
   }
 
+  /*
+   * Set ready value
+   */
+  io.updMSHRVec(PipeID.RESP).ready  := true.B
+  io.updMSHRVec(PipeID.REQ).ready   := true.B
+  io.resp2Exu.ready                 := true.B
 
 
   // ---------------------------------------------------------------------------------------------------------------------- //
@@ -304,8 +308,8 @@ class MSHRCtl()(implicit p: Parameters) extends DJModule with HasPerfLogging {
             m.mshrMes.selfLock  := false.B
             assert(Mux(m.isAlreadySend, m.mshrMes.selfLock, m.mshrMes.selfLock | m.chiMes.opcode =/= Replace), s"MSHR[${i}][${j}]")
           // Set by ProcessPipe
-          }.elsewhen((io.updMSHRLock(PipeID.RESP).valid & io.updMSHRLock(PipeID.RESP).bits.mshrMatch(i, j)) |
-                     (io.updMSHRLock(PipeID.REQ).valid  & io.updMSHRLock(PipeID.REQ).bits.mshrMatch(i, j))) {
+          }.elsewhen((io.updMSHRVec(PipeID.RESP).fire & io.updMSHRVec(PipeID.RESP).bits.unlock & io.updMSHRVec(PipeID.RESP).bits.mshrMatch(i, j)) |
+                     (io.updMSHRVec(PipeID.REQ).fire  & io.updMSHRVec(PipeID.REQ).bits.unlock  & io.updMSHRVec(PipeID.REQ).bits.mshrMatch(i, j))) {
             m.mshrMes.selfLock  := false.B
             assert(m.mshrMes.selfLock, s"MSHR[${i}][${j}]")
           }
@@ -331,15 +335,17 @@ class MSHRCtl()(implicit p: Parameters) extends DJModule with HasPerfLogging {
             nextState       := Mux(nodeHit, BESEND, FREE)
             // BeSend
           }.elsewhen(m.isBeSend) {
-            val reqhit      = taskReq_s0.valid & canGoReq_s0 & taskReq_s0.bits.mshrMatch(i, j)
+            val reqhit      = taskReq_s0.valid  & canGoReq_s0  & taskReq_s0.bits.mshrMatch(i, j)
             val resphit     = taskResp_s0.valid & canGoResp_s0 & taskResp_s0.bits.mshrMatch(i, j)
             nextState       := Mux(reqhit | resphit, ALREADYSEND, BESEND)
           // AlreadySend
           }.elsewhen(m.isAlreadySend) {
-            val hit         = io.updMSHR.valid & io.updMSHR.bits.mshrMatch(i, j)
-            val retry       = hit & io.updMSHR.bits.isRetry
-            val update      = hit & io.updMSHR.bits.isUpdate
-            val clean       = hit & io.updMSHR.bits.isClean
+            val respPipeHit = io.updMSHRVec(PipeID.RESP).fire & io.updMSHRVec(PipeID.RESP).bits.mshrMatch(i, j)
+            val reqPipeHit  = io.updMSHRVec(PipeID.REQ).fire  & io.updMSHRVec(PipeID.REQ).bits.mshrMatch(i, j)
+            val hit         = respPipeHit | reqPipeHit
+            val retry       = hit & Mux(respPipeHit, io.updMSHRVec(PipeID.RESP).bits.isRetry,  io.updMSHRVec(PipeID.REQ).bits.isRetry)
+            val update      = hit & Mux(respPipeHit, io.updMSHRVec(PipeID.RESP).bits.isUpdate, io.updMSHRVec(PipeID.REQ).bits.isUpdate)
+            val clean       = hit & Mux(respPipeHit, io.updMSHRVec(PipeID.RESP).bits.isClean,  io.updMSHRVec(PipeID.REQ).bits.isClean)
             nextState       := Mux(retry, BESEND,
                                  Mux(update, WAITRESP,
                                    Mux(clean, FREE, ALREADYSEND)))

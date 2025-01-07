@@ -32,7 +32,6 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
     val task        = Flipped(Decoupled(new PipeTaskBundle()))
     // Update Task To MSHR
     val updMSHR     = Decoupled(new UpdateMSHRReqBundle())
-    val updMSHRLock = Valid(new MSHRIndexBundle())
     // Req To Node
     val req2Intf    = Decoupled(new Req2IntfBundle())
     // Resp To Node
@@ -55,8 +54,8 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
   val canGo_s2_dir        = Wire(Bool())
 
   // s3 basic signals
-  val canGo_s3            = Wire(Bool())
-  val valid_s3            = Wire(Bool())
+  val canGo_s3            = Wire(Bool()); dontTouch(canGo_s3)
+  val valid_s3            = Wire(Bool()); dontTouch(valid_s3)
   val task_s3_needDir     = Wire(Bool())
   val task_s3             = WireInit(0.U.asTypeOf(Valid(new PipeTaskBundle()))); dontTouch(task_s3)
   val dirRes_s3           = WireInit(0.U.asTypeOf(Valid(new DirRespBundle()))); dontTouch(dirRes_s3)
@@ -72,9 +71,8 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
   val todo_s3_retry       = Wire(Bool()); dontTouch(todo_s3_retry)
   val todo_s3_replace     = Wire(Bool()); dontTouch(todo_s3_replace) // replace self Directory
   val todo_s3_sfEvict     = Wire(Bool()); dontTouch(todo_s3_sfEvict) // replace snoop filter
-  val todo_s3_updateMSHR  = Wire(Bool()); dontTouch(todo_s3_updateMSHR)
+  val todo_s3_updMSHR     = Wire(Bool()); dontTouch(todo_s3_updMSHR)
   val todo_s3_cleanMSHR   = Wire(Bool()); dontTouch(todo_s3_cleanMSHR)
-  val done_s3_g_updMSHR   = RegInit(false.B)
 
 
   // s4 temp signals get from s3
@@ -84,11 +82,14 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
     val decode            = new DecodeBundle()
     val snpNodeVec        = Vec(nrCcNode, Bool())
     val dirRes            = new DirRespBundle()
-    val updMSHRLock       = Bool()
     val respType          = UInt(RespType.width.W)
     val srcMetaID         = UInt((metaIdBits+1).W)
     val todo_replace      = Bool()
     val todo_sfEvict      = Bool()
+    // mshr
+    val todo_retry        = Bool()
+    val todo_updMSHR      = Bool()
+    val todo_cleanMSHR    = Bool()
   })); dontTouch(s4_temp_g)
   // s4 signals get from s3
   val s3                  = WireInit(0.U.asTypeOf(s4_temp_g)); dontTouch(s3)
@@ -114,21 +115,31 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
   val todo_s4             = WireInit(0.U.asTypeOf(new OperationsBundle())); dontTouch(todo_s4)
   // s4 execute signals: Execute specific tasks
   val done_s4_g           = RegInit(0.U.asTypeOf(new OperationsBundle()))
+  val done_s4_g_updMSHR   = RegInit(false.B)
   val done_s4_g_sfEvict   = RegInit(false.B)
-  val done_s4_g_updLock   = RegInit(false.B)
   val reqBeSend_s4        = Wire(Vec(7, new Req2IntfBundle()))
+  // s4 execute signals: Execute Done
+  val comUpdMSHR          = Wire(Bool()); dontTouch(comUpdMSHR)
+  val reqDone             = Wire(Bool()); dontTouch(reqDone)
+  val dirDone             = Wire(Bool()); dontTouch(dirDone)
+  val rcDBDone            = Wire(Bool()); dontTouch(rcDBDone)
+  val comDone             = Wire(Bool()); dontTouch(comDone)
 
 
   /*
    * for Debug
    */
   // s3
-  val task_s3_dbg_addr    = Wire(UInt(fullAddrBits.W))
-  task_s3_dbg_addr        := task_s3.bits.taskMes.fullAddr(io.dcuID, io.pcuID)
+  val task_s3_dbg_addr      = Wire(UInt(fullAddrBits.W))
+  task_s3_dbg_addr          := task_s3.bits.taskMes.fullAddr(io.dcuID, io.pcuID)
   if (p(DebugOptionsKey).EnableDebug) dontTouch(task_s3_dbg_addr)
+  // s4_temp
+  val task_s4_temp_dbg_addr = Wire(UInt(fullAddrBits.W))
+  task_s4_temp_dbg_addr     := s4_temp_g.task.taskMes.fullAddr(io.dcuID, io.pcuID)
+  if (p(DebugOptionsKey).EnableDebug) dontTouch(task_s4_temp_dbg_addr)
   // s4
-  val task_s4_dbg_addr    = Wire(UInt(fullAddrBits.W))
-  task_s4_dbg_addr        := s4_g.task.taskMes.fullAddr(io.dcuID, io.pcuID)
+  val task_s4_dbg_addr      = Wire(UInt(fullAddrBits.W))
+  task_s4_dbg_addr          := s4_g.task.taskMes.fullAddr(io.dcuID, io.pcuID)
   if (p(DebugOptionsKey).EnableDebug) dontTouch(task_s4_dbg_addr)
 
 
@@ -171,7 +182,7 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
    */
   val s2Fire            = taskQ.io.deq.fire
   valid_s3              := Mux(task_s3.bits.taskMes.readDir, task_s3.valid & dirRes_s3.valid, task_s3.valid)
-  canGo_s3              := !valid_s4_temp_g & (io.updMSHR.fire | done_s3_g_updMSHR)
+  canGo_s3              := !valid_s4_temp_g
 
 
 // ---------------------------------------------------------------------------------------------------------------------- //
@@ -295,7 +306,7 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
 
 
 // ---------------------------------------------------------------------------------------------------------------------- //
-// ---------------------------------------------- S3_Execute: Update MSHR ------------------------------------------------//
+// --------------------------------------------- S3_Execute: Get some todos ----------------------------------------------//
 // ---------------------------------------------------------------------------------------------------------------------- //
   /*
    * Set todo_s3 value
@@ -309,30 +320,11 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
   todo_s3_retry       := todo_s3.wSDir & dirRes_s3.bits.s.replRetry | todo_s3.wSFDir & dirRes_s3.bits.sf.replRetry; assert(Mux(valid_s3, !todo_s3_retry, true.B), "TODO")
   todo_s3_replace     := todo_s3.wSDir & !hnHit_s3 & !dirRes_s3.bits.s.metaVec(0).isInvalid & !todo_s3_retry // TODO: Only need to replace when it is Dirty
   todo_s3_sfEvict     := todo_s3.wSFDir & !srcHit_s3 & !othHit_s3 & dirRes_s3.bits.sf.metaVec.map(!_.isInvalid).reduce(_ | _) & !todo_s3_retry
-  todo_s3_updateMSHR  := decode_s3.needWaitSlv | decode_s3.needWaitMst | todo_s3_replace | todo_s3_sfEvict
-  todo_s3_cleanMSHR   := !(todo_s3_retry | todo_s3_updateMSHR)
-  assert(Mux(valid_s3, PopCount(Seq(todo_s3_retry, todo_s3_updateMSHR, todo_s3_cleanMSHR)) === 1.U, true.B))
+  todo_s3_updMSHR     := decode_s3.needWaitSlv | decode_s3.needWaitMst | todo_s3_replace | todo_s3_sfEvict
+  todo_s3_cleanMSHR   := !(todo_s3_retry | todo_s3_updMSHR)
+  assert(Mux(valid_s3, PopCount(Seq(todo_s3_retry, todo_s3_updMSHR, todo_s3_cleanMSHR)) === 1.U, true.B))
   assert(Mux(valid_s3, PopCount(Seq(todo_s3_replace, todo_s3_sfEvict)) <= 1.U, true.B))
   assert(Mux(valid_s3 & todo_s3_replace, todo_s3.writeDCU, true.B))
-
-  /*
-   * Update MSHR Mes or let task retry
-   */
-  io.updMSHR.bits.mshrSet     := task_s3.bits.taskMes.mSet
-  io.updMSHR.bits.mshrWay     := task_s3.bits.taskMes.mshrWay
-  io.updMSHR.bits.updType     := Mux(todo_s3_retry, UpdMSHRType.RETRY,  UpdMSHRType.UPD)
-  io.updMSHR.bits.waitIntfVec := (Mux(decode_s3.needWaitSlv | todo_s3_sfEvict, UIntToOH(IncoID.LOCALSLV.U), (todo_s3.readDown | todo_s3.readDCU) & task_s3.bits.chiMes.expCompAck & djparam.openDMT.asBool) |
-                                  Mux(decode_s3.needWaitMst | todo_s3_replace, UIntToOH(IncoID.LOCALMST.U), 0.U)).asBools
-  io.updMSHR.bits.mTag        := Mux(todo_s3_replace | todo_s3_sfEvict, Mux(todo_s3_replace, dirRes_s3.bits.s.mTag, dirRes_s3.bits.sf.mTag), task_s3.bits.taskMes.mTag)
-  assert(!((decode_s3.needWaitSlv | todo_s3_sfEvict) & ((todo_s3.readDown | todo_s3.readDCU) & task_s3.bits.chiMes.expCompAck & djparam.openDMT.B)))
-  // Only Use In New Req
-  io.updMSHR.bits.hasNewReq   := todo_s3_replace | todo_s3_sfEvict
-  io.updMSHR.bits.opcode      := Mux(todo_s3_replace, Replace,            SnpUniqueEvict)
-  io.updMSHR.bits.channel     := Mux(todo_s3_replace, CHIChannel.REQ,     CHIChannel.SNP)
-  // Common
-  io.updMSHR.valid            := valid_s3 & (todo_s3_retry | todo_s3_updateMSHR | todo_s3_cleanMSHR) & !done_s3_g_updMSHR
-  done_s3_g_updMSHR           := Mux(s2Fire, false.B, done_s3_g_updMSHR | io.updMSHR.fire)
-  
 
 
 // ---------------------------------------------------------------------------------------------------------------------- //
@@ -349,12 +341,14 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
   s3.todo_sfEvict   := todo_s3_sfEvict
   s3.respType       := inst_s3.respType
   s3.srcMetaID      := srcMetaID_s3
-  s3.updMSHRLock    := task_s3.bits.taskMes.readDir & !todo_s3_replace & io.updMSHR.bits.isUpdate
+  s3.todo_retry     := todo_s3_retry
+  s3.todo_updMSHR   := todo_s3_updMSHR
+  s3.todo_cleanMSHR := todo_s3_cleanMSHR
 
   /*
   * S4 base ctrl logic
   */
-  val s3Fire        = task_s3.valid & !todo_s3_retry & canGo_s3
+  val s3Fire        = valid_s3 & canGo_s3
   val s4Fire        = valid_s4_g & canGo_s4
 
   switch(Cat(valid_s4_temp_g, valid_s4_g)) {
@@ -610,6 +604,32 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
   }
 
 
+// ---------------------------------------------------------------------------------------------------------------------- //
+// ---------------------------------------------- S4_Execute: Update MSHR ------------------------------------------------//
+// ---------------------------------------------------------------------------------------------------------------------- //
+  /*
+   * Update MSHR Mes or let task retry
+   */
+  io.updMSHR.bits.mshrSet     := s4_g.task.taskMes.mSet
+  io.updMSHR.bits.mshrWay     := s4_g.task.taskMes.mshrWay
+  io.updMSHR.bits.updType     := Mux(s4_g.todo_retry, UpdMSHRType.RETRY, UpdMSHRType.UPD)
+  io.updMSHR.bits.waitIntfVec := (Mux(s4_g.decode.needWaitSlv | s4_g.todo_sfEvict, UIntToOH(IncoID.LOCALSLV.U), (s4_g.decode.readDown | s4_g.decode.readDCU) & s4_g.task.chiMes.expCompAck & djparam.openDMT.asBool) |
+                                  Mux(s4_g.decode.needWaitMst | s4_g.todo_replace, UIntToOH(IncoID.LOCALMST.U), 0.U)).asBools
+  io.updMSHR.bits.mTag        := Mux(s4_g.todo_replace, s4_g.dirRes.s.mTag, Mux(s4_g.todo_sfEvict, s4_g.dirRes.sf.mTag, s4_g.task.taskMes.mTag))
+  assert(!((s4_g.decode.needWaitSlv | s4_g.todo_sfEvict) & ((s4_g.decode.readDown | s4_g.decode.readDCU) & s4_g.task.chiMes.expCompAck & djparam.openDMT.B)))
+  // Only Use In New Req
+  io.updMSHR.bits.hasNewReq   := s4_g.todo_replace | s4_g.todo_sfEvict
+  io.updMSHR.bits.opcode      := Mux(s4_g.todo_replace, Replace, SnpUniqueEvict)
+  io.updMSHR.bits.channel     := Mux(s4_g.todo_replace, CHIChannel.REQ, CHIChannel.SNP)
+  // Unlock MSHR
+  io.updMSHR.bits.unlock      := s4_g.task.taskMes.readDir & !s4_g.todo_replace
+  // Common
+  io.updMSHR.valid            := valid_s4_g & !done_s4_g_updMSHR & dirDone; assert(Mux(valid_s4_g, s4_g.todo_retry | s4_g.todo_updMSHR | s4_g.todo_cleanMSHR, true.B))
+  done_s4_g_updMSHR           := Mux(s4Fire, false.B, done_s4_g_updMSHR | io.updMSHR.fire)
+  // updata mshr
+  comUpdMSHR                  := done_s4_g_updMSHR | io.updMSHR.fire
+
+
 
 // ---------------------------------------------------------------------------------------------------------------------- //
 // ------------------------ S4_Execute: Execute specific tasks value based on decode results -----------------------------//
@@ -634,66 +654,53 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
   reqBeSend_s4(4)   := Mux(s4_g.todo_replace, taskRepl_s4, writeDCU_s4) // writeDCU transfer to taskRepl_s4
   reqBeSend_s4(5)   := taskSnpEvict_s4
   reqBeSend_s4(6)   := flush_s4
-  io.req2Intf.valid := valid_s4_g & reqTodoList.reduce(_ | _)
+  io.req2Intf.valid := valid_s4_g & !s4_g.todo_retry & reqTodoList.reduce(_ | _)
   io.req2Intf.bits  := reqBeSend_s4(toBeSendId)
   reqDoneList.zipWithIndex.foreach { case(d, i) => d := Mux(s4Fire, false.B, d | (io.req2Intf.fire & toBeSendId === i.U)) }
   // req
-  val reqDone       = PopCount(reqTodoList) === 0.U | (PopCount(reqTodoList) === 1.U & io.req2Intf.fire)
+  reqDone           := s4_g.todo_retry | PopCount(reqTodoList) === 0.U | (PopCount(reqTodoList) === 1.U & io.req2Intf.fire)
 
 
   /*
    * Send Write Req to Directory
    */
   // self
-  io.dirWrite.s.valid   := valid_s4_g & todo_s4.wSDir & !done_s4_g.wSDir
+  io.dirWrite.s.valid   := valid_s4_g & !s4_g.todo_retry & todo_s4.wSDir & !done_s4_g.wSDir
   io.dirWrite.s.bits    := wSDir_s4
   done_s4_g.wSDir       := Mux(s4Fire, false.B, done_s4_g.wSDir | io.dirWrite.s.fire)
   // sf
-  io.dirWrite.sf.valid  := valid_s4_g & todo_s4.wSFDir & !done_s4_g.wSFDir
+  io.dirWrite.sf.valid  := valid_s4_g & !s4_g.todo_retry & todo_s4.wSFDir & !done_s4_g.wSFDir
   io.dirWrite.sf.bits   := wSFDir_s4
   done_s4_g.wSFDir      := Mux(s4Fire, false.B, done_s4_g.wSFDir | io.dirWrite.sf.fire)
   // dir
   val dirTodoList       = Seq(todo_s4.wSDir  & !done_s4_g.wSDir  & !io.dirWrite.s.fire,
                               todo_s4.wSFDir & !done_s4_g.wSFDir & !io.dirWrite.sf.fire)
-  val dirDone           = PopCount(dirTodoList) === 0.U
+  dirDone               := s4_g.todo_retry | PopCount(dirTodoList) === 0.U
 
 
   /*
    * Send Read or Clean Req to DataBuffer
    */
-  io.dbRCReq.valid      := valid_s4_g & ((todo_s4.rDB2Src & !done_s4_g.rDB2Src) | (todo_s4.cleanDB & !done_s4_g.cleanDB))
+  io.dbRCReq.valid      := valid_s4_g & !s4_g.todo_retry & ((todo_s4.rDB2Src & !done_s4_g.rDB2Src) | (todo_s4.cleanDB & !done_s4_g.cleanDB))
   io.dbRCReq.bits       := rcDBReq_s4
   done_s4_g.rDB2Src     := Mux(s4Fire, false.B, done_s4_g.rDB2Src | (io.dbRCReq.fire & io.dbRCReq.bits.isRead))
   done_s4_g.cleanDB     := Mux(s4Fire, false.B, done_s4_g.cleanDB | (io.dbRCReq.fire & io.dbRCReq.bits.isClean))
   val rcDBTodoList      = Seq(todo_s4.rDB2Src & !done_s4_g.rDB2Src & !io.dbRCReq.fire,
                               todo_s4.cleanDB & !done_s4_g.cleanDB & !io.dbRCReq.fire)
-  val rcDBDone          = PopCount(rcDBTodoList) === 0.U
+  rcDBDone              := s4_g.todo_retry | PopCount(rcDBTodoList) === 0.U
 
   /*
    * Send Commit to S4
    */
-  io.resp2Intf.valid    := valid_s4_g & todo_s4.commit & !done_s4_g.commit
+  io.resp2Intf.valid    := valid_s4_g & !s4_g.todo_retry & todo_s4.commit & !done_s4_g.commit
   io.resp2Intf.bits     := commit_s4
   done_s4_g.commit      := Mux(s4Fire, false.B, done_s4_g.commit | io.resp2Intf.fire)
-  val comDone           = !(todo_s4.commit & !done_s4_g.commit & !io.resp2Intf.fire)
+  comDone               := s4_g.todo_retry | !(todo_s4.commit & !done_s4_g.commit & !io.resp2Intf.fire)
 
   /*
    * Set Can Go S3 Value
    */
-  canGo_s4              := valid_s4_g & reqDone & dirDone & rcDBDone & comDone
-  dontTouch(reqDone)
-  dontTouch(dirDone)
-  dontTouch(rcDBDone)
-  dontTouch(comDone)
-
-
-// ---------------------------------------------------------------------------------------------------------------------- //
-// ------------------------------------------- S4_Execute: UnLock MshrLockVec ------------------------------------------- //
-// ---------------------------------------------------------------------------------------------------------------------- //
-  done_s4_g_updLock           := Mux(s4Fire, false.B, done_s4_g_updLock | io.updMSHRLock.valid)
-  io.updMSHRLock.valid        := valid_s4_g & dirDone & s4_g.updMSHRLock & !done_s4_g_updLock
-  io.updMSHRLock.bits.mshrSet := s4_g.task.taskMes.mSet
-  io.updMSHRLock.bits.mshrWay := s4_g.task.taskMes.mshrWay
+  canGo_s4              := valid_s4_g & comUpdMSHR & reqDone & dirDone & rcDBDone & comDone
 
 
 // ----------------------------------------------------- Assertion ------------------------------------------------------ //
