@@ -24,8 +24,10 @@ trait BaseIcnMonoBundle {
 class IcnTxBundle(node: Node)(implicit p: Parameters) extends ZJBundle with BaseIcnMonoBundle {
   private val illegal = node.ejects.contains("REQ") && node.ejects.contains("ERQ")
   require(!illegal)
-  val req = if(node.ejects.contains("REQ") || node.ejects.contains("ERQ") && !node.csnNode) {
-    if(node.splitFlit) Some(Decoupled(new ReqFlit)) else Some(Decoupled(UInt(reqFlitBits.W)))
+  val req = if(node.ejects.contains("REQ")) {
+    if(node.splitFlit) Some(Decoupled(new ReqFlit(false))) else Some(Decoupled(UInt(reqFlitBits.W)))
+  } else if(node.ejects.contains("ERQ") && !node.csnNode) {
+    if(node.splitFlit) Some(Decoupled(new ReqFlit(true))) else Some(Decoupled(UInt(reqDmtFlitBits.W)))
   } else None
 
   val resp = if(node.ejects.contains("RSP")) {
@@ -55,8 +57,10 @@ class IcnTxBundle(node: Node)(implicit p: Parameters) extends ZJBundle with Base
 class IcnRxBundle(node: Node)(implicit p: Parameters) extends ZJBundle with BaseIcnMonoBundle {
   private val illegal = node.injects.contains("REQ") && node.injects.contains("ERQ")
   require(!illegal)
-  val req = if(node.injects.contains("REQ") || node.injects.contains("ERQ") && !node.csnNode) {
-    if(node.splitFlit) Some(Flipped(Decoupled(new ReqFlit))) else Some(Flipped(Decoupled(UInt(reqFlitBits.W))))
+  val req = if(node.injects.contains("REQ")){
+    if(node.splitFlit) Some(Flipped(Decoupled(new ReqFlit(false)))) else Some(Flipped(Decoupled(UInt(reqFlitBits.W))))
+  } else if(node.injects.contains("ERQ") && !node.csnNode) {
+    if(node.splitFlit) Some(Flipped(Decoupled(new ReqFlit(true)))) else Some(Flipped(Decoupled(UInt(reqDmtFlitBits.W))))
   } else None
 
   val resp = if(node.injects.contains("RSP")) {

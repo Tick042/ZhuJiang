@@ -94,8 +94,8 @@ package object bridge {
       info.size := req.Size
       info.txnId := req.TxnID
       info.srcId := req.SrcID
-      info.returnNid.foreach(_ := req.ReturnNID)
-      info.returnTxnId.foreach(_ := req.ReturnTxnID)
+      info.returnNid.foreach(_ := req.ReturnNID.get)
+      info.returnTxnId.foreach(_ := req.ReturnTxnID.get)
       info.dwt.foreach(_  := req.Opcode =/= ReqOpcode.ReadNoSnp && req.DoDWT)
       info.readCnt := 0.U
       info.isSnooped := true.B

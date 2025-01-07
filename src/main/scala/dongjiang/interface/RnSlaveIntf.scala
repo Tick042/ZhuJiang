@@ -833,7 +833,7 @@ class RnSlaveIntf(param: InterfaceParam, node: Node)(implicit p: Parameters) ext
            Mux(rxReq.bits.Opcode === WriteUniqueFull, rxReq.bits.Size <= chiFullSize.U,
                                                 rxReq.bits.Size === chiFullSize.U)))))) // Other
     // Endian
-    assert(rxReq.bits.Endian.asUInt === 0.U) // Must be Little Endian
+//    assert(rxReq.bits.Endian.asUInt === 0.U) // Must be Little Endian
   }
 
   when(rxDat.valid) {

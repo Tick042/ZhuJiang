@@ -108,12 +108,12 @@ class DataCtrlUnit(nodes: Seq[Node])(implicit p: Parameters) extends DJRawModule
 
 // ----------------------------------------- Reg and Wire declaration ------------------------------------ //
   // CHI
-  val rxReq     = Wire(new DecoupledIO(new ReqFlit))
+  val rxReq     = Wire(new DecoupledIO(new ReqFlit(true)))
   val rxDat     = Wire(new DecoupledIO(new DataFlit))
   val txRsp     = WireInit(0.U.asTypeOf(Decoupled(new RespFlit)))
   val txDat     = WireInit(0.U.asTypeOf(Decoupled(new DataFlit)))
 
-  val rxReqVec  = Wire(Vec(nrIcn, new DecoupledIO(new ReqFlit)))
+  val rxReqVec  = Wire(Vec(nrIcn, new DecoupledIO(new ReqFlit(true))))
   val rxDatVec  = Wire(Vec(nrIcn, new DecoupledIO(new DataFlit)))
   val txRspVec  = Wire(Vec(nrIcn, new DecoupledIO(new RespFlit)))
   val txDatVec  = Wire(Vec(nrIcn, new DecoupledIO(new DataFlit)))
@@ -274,8 +274,8 @@ class DataCtrlUnit(nodes: Seq[Node])(implicit p: Parameters) extends DJRawModule
             r.dsBank    := parseDCUAddr(rxReq.bits.Addr)._3
             r.srcID     := rxReq.bits.SrcID
             r.txnID     := rxReq.bits.TxnID
-            r.returnNID := rxReq.bits.ReturnNID
-            r.returnTxnID := rxReq.bits.ReturnTxnID
+            r.returnNID := rxReq.bits.ReturnNID.get
+            r.returnTxnID := rxReq.bits.ReturnTxnID.get
             r.resp      := rxReq.bits.MemAttr(ChiResp.width - 1, 0)
             r.beatOH    := Mux(rxReq.bits.Size === chiFullSize.U, "b11".U, Cat(beatOff, !beatOff))
           }
@@ -342,8 +342,9 @@ class DataCtrlUnit(nodes: Seq[Node])(implicit p: Parameters) extends DJRawModule
   }
   rxDat.ready := true.B
   // HardwareAssertion
-  val beatNum = Mux(wBufRegVec(rxDat.bits.TxnID).beatOH === "b10".U, 1.U, toBeatNum(rxDat.bits.DataID))
-  HardwareAssertion.withEn(!wBufRegVec(rxDat.bits.TxnID).beats(beatNum).valid, rxDat.fire, cf"WriteBuffer[${rxDat.bits.TxnID}] [${beatNum}]", rxDat.bits.TxnID, beatNum)
+  val bufSel = rxDat.bits.TxnID(log2Ceil(wBufRegVec.length) - 1, 0)
+  val beatNum = Mux(wBufRegVec(bufSel).beatOH === "b10".U, 1.U, toBeatNum(rxDat.bits.DataID))
+  HardwareAssertion.withEn(!wBufRegVec(bufSel).beats(beatNum).valid, rxDat.fire, cf"WriteBuffer[${rxDat.bits.TxnID}] [${beatNum}]", rxDat.bits.TxnID, beatNum)
 
   /*
     * Write Req Buf Replace Read State
@@ -355,7 +356,7 @@ class DataCtrlUnit(nodes: Seq[Node])(implicit p: Parameters) extends DJRawModule
           val hit         = rxReq.fire & reqIsRepl & selRecWID === i.U
           when(hit) {
             r.replRState  := DCURState.ReadSram
-            r.returnTxnID := rxReq.bits.ReturnTxnID
+            r.returnTxnID := rxReq.bits.ReturnTxnID.get
           }
         }
         is(DCURState.ReadSram) {

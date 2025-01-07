@@ -77,7 +77,7 @@ class DataBuffer()(implicit p: Parameters) extends DJModule with HasPerfLogging 
   val beatInQ       = Module(new Queue(new BeatBundle with HasDBID with HasBeatBum, entries = 2, flow = false, pipe = false))
   val beatOutQ      = Module(new Queue(new NodeFDBData(), entries = 2, flow = false, pipe = false))
   // apu
-  val apuEntryInit  = WireInit(0.U.asTypeOf(new APUEntry())); apuEntryInit.op := AtomicOp.NONE
+  val apuEntryInit  = WireInit(0.U.asTypeOf(new APUEntry())); apuEntryInit.op := AtomicOp.NONE.U
   val apuEntrys     = RegInit(VecInit(Seq.fill(djparam.nrAPU) { apuEntryInit }))
   // dbid resp queue
   val dbidRespQ     = Module(new Queue(new DBIDResp(), entries = 1, flow = false, pipe = true))
@@ -224,7 +224,7 @@ class DataBuffer()(implicit p: Parameters) extends DJModule with HasPerfLogging 
   apu.io.in.bits.atomic := apuEntrys(outApuEID).atomic
   apu.io.in.bits.data   := io.dataFDB.bits.data
 
-  assert(Mux(apu.io.in.valid, apuEntrys(outApuEID).op =/= AtomicOp.NONE, true.B))
+  assert(Mux(apu.io.in.valid, apuEntrys(outApuEID).op =/= AtomicOp.NONE.U, true.B))
   assert(Mux(apu.io.in.valid, outDBID >= nrDBWithoutAPUs.U, true.B))
 
 

@@ -10,17 +10,17 @@ import xs.utils.perf.HasPerfLogging
 
 object AtomicOp {
   val width = 4
-  val LDADD   = 0x0.U
-  val LDCLR   = 0x1.U
-  val LDEOR   = 0x2.U
-  val LDSET   = 0x3.U
-  val LDSMAX  = 0x4.U
-  val LDSMIN  = 0x5.U
-  val LDUMAX  = 0x6.U
-  val LDUMIN  = 0x7.U
-  val SWAP    = 0x8.U
-  val COMPARE = 0x9.U
-  val NONE    = 0xF.U
+  val LDADD   = 0x0
+  val LDCLR   = 0x1
+  val LDEOR   = 0x2
+  val LDSET   = 0x3
+  val LDSMAX  = 0x4
+  val LDSMIN  = 0x5
+  val LDUMAX  = 0x6
+  val LDUMIN  = 0x7
+  val SWAP    = 0x8
+  val COMPARE = 0x9
+  val NONE    = 0xF
 }
 
 
@@ -54,8 +54,8 @@ class AtomicProcessUnit()(implicit p: Parameters) extends DJModule with HasPerfL
   })
 
   // assert
-  assert(io.in.bits.op <= COMPARE | !io.in.valid)
-  assert(Mux(io.in.bits.op === COMPARE, PopCount(io.in.bits.atomic.mask) <= 32.U, PopCount(io.in.bits.atomic.mask) <= 8.U) | !io.in.valid)
+  assert(io.in.bits.op <= COMPARE.U | !io.in.valid)
+  assert(Mux(io.in.bits.op === COMPARE.U, PopCount(io.in.bits.atomic.mask) <= 32.U, PopCount(io.in.bits.atomic.mask) <= 8.U) | !io.in.valid)
 
 
 // ----------------------------------------- Reg and Wire declaration ------------------------------------ //
@@ -122,7 +122,7 @@ class AtomicProcessUnit()(implicit p: Parameters) extends DJModule with HasPerfL
    */
   swapDataVec_s1.zipWithIndex.foreach {
     case(swap, i) =>
-      when(in_s1_g.op === SWAP) {
+      when(in_s1_g.op === SWAP.U) {
         swap := Mux(i.U < bytesNum_s1, amoDataVec_s1(i.U + firstByte_s1), 0.U)
       }.elsewhen(in_s1_g.atomic.swapFst) {
         swap := Mux(i.U < halfBytesNum_s1, amoDataVec_s1(i.U + firstByte_s1), 0.U)
@@ -148,9 +148,9 @@ class AtomicProcessUnit()(implicit p: Parameters) extends DJModule with HasPerfL
    */
   initDataVec_s1.zipWithIndex.foreach {
     case (init, i) =>
-      when(in_s1_g.op === COMPARE & in_s1_g.atomic.swapFst) {
+      when(in_s1_g.op === COMPARE.U & in_s1_g.atomic.swapFst) {
         init := Mux(i.U < halfBytesNum_s1, inDataVec_s1(i.U + firstByte_s1 + halfBytesNum_s1), 0.U)
-      }.elsewhen(in_s1_g.op === COMPARE) {
+      }.elsewhen(in_s1_g.op === COMPARE.U) {
         init := Mux(i.U < halfBytesNum_s1, inDataVec_s1(i.U + firstByte_s1), 0.U)
       }.otherwise {
         init := Mux(i.U < bytesNum_s1,     inDataVec_s1(i.U + firstByte_s1), 0.U)
@@ -165,10 +165,10 @@ class AtomicProcessUnit()(implicit p: Parameters) extends DJModule with HasPerfL
    * Get Index
    */
   when(valid_s1_g) {
-    when(in_s1_g.op === COMPARE & in_s1_g.atomic.swapFst) {
+    when(in_s1_g.op === COMPARE.U & in_s1_g.atomic.swapFst) {
       firstIdx_s2_g := firstByte_s1 + halfBytesNum_s1
       lastIdx_s2_g  := firstByte_s1 + bytesNum_s1
-    }.elsewhen(in_s1_g.op === COMPARE) {
+    }.elsewhen(in_s1_g.op === COMPARE.U) {
       firstIdx_s2_g := firstByte_s1
       lastIdx_s2_g  := firstByte_s1 + halfBytesNum_s1
     }.otherwise {

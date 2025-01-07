@@ -182,7 +182,7 @@ class TransactionMachine(node: Node, tlParams: TilelinkParams, outstanding: Int)
   txreq.bits.Addr := task.address
   txreq.bits.Opcode := Mux(task.opcode === AOpcode.Get, ReqOpcode.ReadNoSnp, ReqOpcode.WriteNoSnpPtl)
   txreq.bits.TxnID := io.id
-  txreq.bits.AllowRetry := false.B
+//  txreq.bits.AllowRetry := false.B
   txreq.bits.ExpCompAck := task.opcode =/= AOpcode.Get
   txreq.bits.MemAttr := MemAttr(allocate = false.B, cacheable = false.B, device = true.B, ewa = false.B /* EAW can take any value for ReadNoSnp/WriteNoSnp* */).asUInt
   txreq.bits.Size := task.size
@@ -201,7 +201,7 @@ class TransactionMachine(node: Node, tlParams: TilelinkParams, outstanding: Int)
   txdat.bits.BE := maskVec.asUInt
   txdat.bits.Data := Fill(segNum, task.data)
   txdat.bits.Opcode := DatOpcode.NonCopyBackWriteData
-  txdat.bits.CCID := task.address(log2Ceil(chiDataBytes), log2Ceil(chiDataBytes) - 2 + 1)
+//  txdat.bits.CCID := task.address(log2Ceil(chiDataBytes), log2Ceil(chiDataBytes) - 2 + 1)
   txdat.bits.DataID := Cat(task.address(log2Ceil(chiDataBytes)), 0.U(1.W))
   txdat.bits.Resp := 0.U
   txdat.bits.TxnID := rspDBID

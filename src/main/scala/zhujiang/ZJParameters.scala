@@ -8,6 +8,7 @@ import xijiang.c2c.C2cParams
 import xijiang.tfb.TrafficBoardParams
 import xijiang.tfs.TrafficSimParams
 import xijiang.{Node, NodeParam, NodeType}
+import zhujiang.chi.{DataFlit, ReqFlit, RespFlit, SnoopFlit}
 import zhujiang.device.dma.DmaParams
 
 import scala.math.abs
@@ -276,16 +277,18 @@ trait HasZJParams {
   lazy val dw = zjParams.dataBits
   lazy val bew = zjParams.beBits
   lazy val nodeAidBits = zjParams.nodeAidBits
-  lazy val reqFlitBits = zjParams.reqFlitBits
-  lazy val respFlitBits = zjParams.respFlitBits
-  lazy val snoopFlitBits = zjParams.snoopFlitBits
-  lazy val dataFlitBits = zjParams.dataFlitBits
-  lazy val maxFlitBits = zjParams.maxFlitBits
   lazy val nodeNidBits = zjParams.nodeNidBits
   lazy val nodeNetBits = zjParams.nodeNetBits
   lazy val hasTfb = zjParams.tfbParams.isDefined
   lazy val bankOff = zjParams.bankOff
   lazy val clusterIdBits = zjParams.clusterIdBits
+
+  lazy val reqFlitBits = new ReqFlit(false)(p).getWidth
+  lazy val reqDmtFlitBits = new ReqFlit(true)(p).getWidth
+  lazy val respFlitBits = new RespFlit()(p).getWidth
+  lazy val snoopFlitBits = new SnoopFlit()(p).getWidth
+  lazy val dataFlitBits = new DataFlit()(p).getWidth
+  lazy val maxFlitBits = Seq(reqFlitBits, respFlitBits, snoopFlitBits, dataFlitBits, reqDmtFlitBits).max
 }
 
 class ZJBundle(implicit val p: Parameters) extends Bundle with HasZJParams

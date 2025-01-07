@@ -63,7 +63,7 @@ class ChiSnBridgeCtrlMachine(
   private val snWriteNoSnpPtl = payload.state.snWriteNoSnpPtl
   private val snReadNoSnp = payload.state.snReadNoSnp
   private val snNCBWrDataCompAck = payload.state.snNCBWrDataCompAck
-  private val snReqB = Wire(new ReqFlit)
+  private val snReqB = Wire(new ReqFlit(true))
   private val snDatB = Wire(new DataFlit)
 
   sn.tx.req.valid := valid && (snWriteNoSnpPtl || snReadNoSnp) && !waiting.orR
@@ -77,7 +77,7 @@ class ChiSnBridgeCtrlMachine(
   snReqB.Size := payload.info.size
   snReqB.Order := payload.info.order
   snReqB.ExpCompAck := false.B
-  snReqB.ReturnTxnID := io.idx
+  snReqB.ReturnTxnID.get := io.idx
   snReqB.DoDWT := false.B
   sn.tx.req.bits := snReqB
 

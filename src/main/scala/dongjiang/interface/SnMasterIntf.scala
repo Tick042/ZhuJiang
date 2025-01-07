@@ -193,7 +193,7 @@ class SnMasterIntf(param: InterfaceParam, node: Node)(implicit p: Parameters) ex
   val rxDat           = Wire(new DecoupledIO(new DataFlit()))
   val rxRsp           = Wire(new DecoupledIO(new RespFlit()))
   val txDat           = WireInit(0.U.asTypeOf(Decoupled(new DataFlit())))
-  val txReq           = WireInit(0.U.asTypeOf(Decoupled(new ReqFlit())))
+  val txReq           = WireInit(0.U.asTypeOf(Decoupled(new ReqFlit(true))))
   io.chi              <> DontCare
   io.chi.rx.data.get  <> rxDat
   io.chi.rx.resp.get  <> rxRsp
@@ -427,8 +427,8 @@ class SnMasterIntf(param: InterfaceParam, node: Node)(implicit p: Parameters) ex
   txReq.bits.MemAttr      := entrys(entryReq2NodeID).chiMes.resp // Multiplex MemAttr to transfer CHI State // Use in Read Req
   txReq.bits.Order        := DontCare // TODO
   //                                                                     Read With DMT                                                                                    Replcae / Flush                         Read Without DMT
-  txReq.bits.ReturnNID    := Mux(entrys(entryReq2NodeID).entryMes.doDMT, getFullNodeID(entrys(entryReq2NodeID).chiIndex.nodeID), Mux(entrys(entryReq2NodeID).isROF2Node,  ddrcNodeId.U,                           io.hnfID))
-  txReq.bits.ReturnTxnID  := Mux(entrys(entryReq2NodeID).entryMes.doDMT, entrys(entryReq2NodeID).chiIndex.txnID,                 Mux(entrys(entryReq2NodeID).isROF2Node,  entrys(entryReq2NodeID).chiIndex.txnID, entryReq2NodeID))
+  txReq.bits.ReturnNID.get    := Mux(entrys(entryReq2NodeID).entryMes.doDMT, getFullNodeID(entrys(entryReq2NodeID).chiIndex.nodeID), Mux(entrys(entryReq2NodeID).isROF2Node,  ddrcNodeId.U,                           io.hnfID))
+  txReq.bits.ReturnTxnID.get  := Mux(entrys(entryReq2NodeID).entryMes.doDMT, entrys(entryReq2NodeID).chiIndex.txnID,                 Mux(entrys(entryReq2NodeID).isROF2Node,  entrys(entryReq2NodeID).chiIndex.txnID, entryReq2NodeID))
   assert(Mux(entrys(entryReq2NodeID).isReadReq, true.B, !entrys(entryReq2NodeID).entryMes.doDMT))
   if (p(DebugOptionsKey).EnableDebug) {
     io.chi_tx_req_bits_DbgAddr.get  := entrys_dbg_addr(entryReq2NodeID)

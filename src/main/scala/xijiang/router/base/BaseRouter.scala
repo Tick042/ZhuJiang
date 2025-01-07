@@ -20,7 +20,7 @@ class RingSide(local: Boolean)(implicit p: Parameters) extends ZJBundle {
   val resp = new ChannelBundle(new RespFlit)
   val data = new ChannelBundle(new DataFlit)
   val snoop = new ChannelBundle(new SnoopFlit)
-  val ereq = if(local) Some(new ChannelBundle(new ReqFlit)) else None
+  val ereq = if(local) Some(new ChannelBundle(new ReqFlit(true))) else None
 
   def getBundle(chn: String) = {
     chn match {
@@ -80,11 +80,11 @@ trait BaseRouterUtils {
   val nid = if(local) node.nodeId.U(niw.W) else node.nodeId.U(niw.W) | router.chip
 
   private val flitMap = Map[String, Flit](
-    "REQ" -> new ReqFlit,
+    "REQ" -> new ReqFlit(false),
     "RSP" -> new RespFlit,
     "DAT" -> new DataFlit,
     "SNP" -> new SnoopFlit,
-    "ERQ" -> new ReqFlit
+    "ERQ" -> new ReqFlit(true)
   )
   val injectsMap = mutable.Map[String, DecoupledIO[Flit]]()
 

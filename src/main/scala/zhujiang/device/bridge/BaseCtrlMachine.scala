@@ -25,7 +25,7 @@ abstract class BaseCtrlMachine[
 )(implicit p: Parameters) extends ZJModule {
   val icn = IO(new Bundle {
     val rx = new Bundle {
-      val req = Flipped(Decoupled(new ReqFlit))
+      val req = Flipped(Decoupled(new ReqFlit(node.nodeType == NodeType.S)))
       val resp = if(node.nodeType == NodeType.HI) Some(Flipped(Decoupled(new RespFlit))) else None
       val data = Flipped(Decoupled(new DataFlit))
     }
@@ -86,7 +86,7 @@ abstract class BaseCtrlMachine[
     payloadMiscNext.info.isSnooped := false.B
   }
 
-  private val req = icn.rx.req.bits.asTypeOf(new ReqFlit)
+  private val req = icn.rx.req.bits.asTypeOf(new ReqFlit(node.nodeType == NodeType.S))
   payloadEnqNext.enq(req, icn.rx.req.valid)
 
   private val plmnu = payloadMiscNext.state.u

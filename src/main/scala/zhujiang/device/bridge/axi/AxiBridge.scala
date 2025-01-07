@@ -91,7 +91,7 @@ class AxiBridge(node: Node)(implicit p: Parameters) extends ZJModule with HasPer
 
   for((cm, idx) <- cms.zipWithIndex) {
     cm.icn.rx.req.valid := icn.rx.req.get.valid && enqCtrl.bits(idx)
-    cm.icn.rx.req.bits := icn.rx.req.get.bits.asTypeOf(new ReqFlit)
+    cm.icn.rx.req.bits := icn.rx.req.get.bits.asTypeOf(new ReqFlit(true))
     cm.icn.rx.data.valid := dataBuffer.io.toCmDat.valid && dataBuffer.io.toCmDat.bits.TxnID === idx.U
     cm.icn.rx.data.bits := dataBuffer.io.toCmDat.bits
 
