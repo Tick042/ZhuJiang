@@ -62,7 +62,7 @@ class DirectoryBase(
 
   val writeQ          = Module(new Queue(new DirWriteBaseBundle(ways, nrMetas, replWayBits), entries = 4, pipe = false, flow = false)) // Adding queue for timing considerations TODO: Finding a suitable entry number
 
-  val updReplQOpt     = if(!useRepl) None else Some(Module(new Queue(new Bundle { val set = UInt(setBits.W); val way = UInt(wayBits.W); val replMes = UInt(repl.nBits.W) }, entries = 2, pipe = true, flow = true)))
+  val updReplQOpt     = if(!useRepl) None else Some(Module(new Queue(new Bundle { val set = UInt(setBits.W); val way = UInt(wayBits.W); val replMes = UInt(repl.nBits.W) }, entries = 2, pipe = false, flow = false)))
 
 // ----------------------- Reg/Wire declaration --------------------------//
   val resetDone       = RegInit(false.B)
@@ -183,30 +183,11 @@ class DirectoryBase(
   }
 
 
-// ---------------------------------------------------------------------------------------------------------------------- //
-// ----------------------------------------------- Update Replace SRAM Mes  --------------------------------------------- //
-// ---------------------------------------------------------------------------------------------------------------------- //
-/*
- * PLRU: update replacer only when read hit or write Dir
- */
-  if (replPolicy == "plru") {
-    replArrayOpt.get.io.wreq.valid               := updReplByHit | dirWrite.fire
-    replArrayOpt.get.io.wreq.bits.addr           := Mux(updReplByHit, updReplQOpt.get.io.deq.bits.set, wSet_s1)
-    replArrayOpt.get.io.wreq.bits.data.foreach(_ := Mux(updReplByHit,
-                                                        repl.get_next_state(updReplQOpt.get.io.deq.bits.replMes, updReplQOpt.get.io.deq.bits.way),
-                                                        repl.get_next_state(dirWrite.bits.replMes,               OHToUInt(dirWrite.bits.wayOH))))
-    assert(Mux(updReplQOpt.get.io.deq.fire,   replArrayOpt.get.io.wreq.fire,                true.B))
-    assert(Mux(dirWrite.fire,                 replArrayOpt.get.io.wreq.fire,                true.B))
-    assert(Mux(replArrayOpt.get.io.wreq.fire, dirWrite.fire | updReplQOpt.get.io.deq.fire,  true.B))
-  } else if(replPolicy == "random") {
-    // nothing to do
-  } else {
-    assert(false.B, "Dont support replacementPolicy except plru or random")
-  }
 
 
-  // ---------------------------------------------------------------------------------------------------------------------- //
-// ------------------------------------------------- S2: Receive SRAM Resp ---------------------------------------------- //
+
+// ---------------------------------------------------------------------------------------------------------------------- //
+// ------------------------------------ S2: Receive SRAM Resp And Read MSHR Set ----------------------------------------- //
 // ---------------------------------------------------------------------------------------------------------------------- //
   /*
    * Read MSHR Set Mes
@@ -338,9 +319,33 @@ class DirectoryBase(
     updReplQOpt.get.io.enq.bits.way     := OHToUInt(io.dirResp.bits.wayOH)
     updReplQOpt.get.io.enq.bits.replMes := replResp_s3_g
     updReplQOpt.get.io.deq.ready        := replArrayOpt.get.io.wreq.ready
-    updReplByHit                        := updReplQOpt.get.io.deq.valid // TODO: MSHR requires delayed unlocking
+    updReplByHit                        := updReplQOpt.get.io.deq.valid
     assert(Mux(updReplQOpt.get.io.enq.valid, updReplQOpt.get.io.enq.ready, true.B))
   }
+
+
+
+// ---------------------------------------------------------------------------------------------------------------------- //
+// ----------------------------------------------- Update Replace SRAM Mes  --------------------------------------------- //
+// ---------------------------------------------------------------------------------------------------------------------- //
+  /*
+   * PLRU: update replacer only when read hit or write Dir
+   */
+    if (replPolicy == "plru") {
+      replArrayOpt.get.io.wreq.valid               := updReplByHit | dirWrite.fire
+      replArrayOpt.get.io.wreq.bits.addr           := Mux(updReplByHit, updReplQOpt.get.io.deq.bits.set, wSet_s1)
+      replArrayOpt.get.io.wreq.bits.data.foreach(_ := Mux(updReplByHit,
+                                                          repl.get_next_state(updReplQOpt.get.io.deq.bits.replMes, updReplQOpt.get.io.deq.bits.way),
+                                                          repl.get_next_state(dirWrite.bits.replMes,               OHToUInt(dirWrite.bits.wayOH))))
+      assert(Mux(updReplQOpt.get.io.deq.fire,   replArrayOpt.get.io.wreq.fire,                true.B))
+      assert(Mux(dirWrite.fire,                 replArrayOpt.get.io.wreq.fire,                true.B))
+      assert(Mux(replArrayOpt.get.io.wreq.fire, dirWrite.fire | updReplQOpt.get.io.deq.fire,  true.B))
+    } else if(replPolicy == "random") {
+      // nothing to do
+    } else {
+      assert(false.B, "Dont support replacementPolicy except plru or random")
+    }
+
 
 
 }
