@@ -166,6 +166,7 @@ class RSEntry(param: InterfaceParam)(implicit p: Parameters) extends DJBundle  {
     val swapFst       = Bool() // Only use in atomic
     val snpFwdSVal    = Bool() // Snoop get SnpRespXFwded
     val snpTgtVec     = Vec(nrCcNode, Bool())
+    val reqIsWrite    = Bool() // Adding Reg for timing considerations
     val reqIsAtomic   = Bool() // Adding Reg for timing considerations
   }
 
@@ -579,6 +580,7 @@ class RnSlaveIntf(param: InterfaceParam, node: Node)(implicit p: Parameters) ext
   entrySave.entryMes.swapFst      := Mux(respVal, false.B,                              Mux(snpVal, false.B,                                    rxReq.bits.Addr(offsetBits -1 , 0)(rxReq.bits.Size).asBool))
   entrySave.entryMes.hasData      := Mux(respVal, io.resp2Intf.bits.chiMes.isDat,       Mux(snpVal, io.req2Intf.bits.pcuMes.hasPcuDBID,         false.B))
   entrySave.entryMes.snpTgtVec    := Mux(respVal, DontCare,                             Mux(snpVal, io.req2Intf.bits.pcuMes.snpTgtVec,          DontCare))
+  entrySave.entryMes.reqIsWrite   := Mux(respVal, false.B,                              Mux(snpVal, false.B,                                    isWriteX(rxReq.bits.Opcode)))
   entrySave.entryMes.reqIsAtomic  := Mux(respVal, false.B,                              Mux(snpVal, false.B,                                    isAtomicX(rxReq.bits.Opcode)))
   entrySave.pcuIndex.mshrWay      := Mux(respVal, io.resp2Intf.bits.pcuIndex.mshrWay,   Mux(snpVal, io.req2Intf.bits.pcuIndex.mshrWay,          DontCare))
   entrySave.pcuIndex.dbID         := Mux(respVal, io.resp2Intf.bits.pcuIndex.dbID,      Mux(snpVal, io.req2Intf.bits.pcuIndex.dbID,             0.U))
@@ -719,12 +721,13 @@ class RnSlaveIntf(param: InterfaceParam, node: Node)(implicit p: Parameters) ext
   /*
    * Set DataBuffer Req Value
    */
-  io.dbSigs.getDBID.valid           := entryGetDBIDVec.reduce(_ | _)
-  io.dbSigs.getDBID.bits.from       := param.intfID.U
-  io.dbSigs.getDBID.bits.entryID    := entryGetDBID
-  io.dbSigs.getDBID.bits.atomicVal  := entrys(entryGetDBID).entryMes.reqIsAtomic
-  io.dbSigs.getDBID.bits.atomicOp   := getAtomicOp(entrys(entryGetDBID).chiMes.opcode)
-  io.dbSigs.getDBID.bits.swapFst    := entrys(entryGetDBID).entryMes.swapFst
+  io.dbSigs.getDBID.valid             := entryGetDBIDVec.reduce(_ | _)
+  io.dbSigs.getDBID.bits.from         := param.intfID.U
+  io.dbSigs.getDBID.bits.entryID      := entryGetDBID
+  io.dbSigs.getDBID.bits.reqIsWrite   := entrys(entryGetDBID).entryMes.reqIsWrite
+  io.dbSigs.getDBID.bits.reqIsAtomic  := entrys(entryGetDBID).entryMes.reqIsAtomic
+  io.dbSigs.getDBID.bits.atomicOp     := getAtomicOp(entrys(entryGetDBID).chiMes.opcode)
+  io.dbSigs.getDBID.bits.swapFst      := entrys(entryGetDBID).entryMes.swapFst
 
   /*
    * Receive DBID From DataBuffer

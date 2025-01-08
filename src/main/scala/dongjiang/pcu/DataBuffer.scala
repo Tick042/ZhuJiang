@@ -70,7 +70,6 @@ class DataBuffer()(implicit p: Parameters) extends DJModule with HasPerfLogging 
   val apu           = Module(new AtomicProcessUnit())
 
 // --------------------- Reg and Wire declaration ------------------------//
-  // entry
   val beatEnrtys    = Module(new DualPortSramTemplate(new BeatBundle(), set = djparam.nrDatBuf * nrBeat, way = 1, shouldReset = false))
   val ctrlEntrys    = RegInit(VecInit(Seq.fill(djparam.nrDatBuf) { 0.U.asTypeOf(new DBEntry()) }))
   // beat queue
@@ -88,15 +87,31 @@ class DataBuffer()(implicit p: Parameters) extends DJModule with HasPerfLogging 
 // ---------------------------------------------------------------------------------------------------------------------- //
 // -------------------------------------------------- GetDBID & DBIDResp ------------------------------------------------ //
 // ---------------------------------------------------------------------------------------------------------------------- //
-  // TODO: optimize selet db entry logic
+/*
+ * DataBuffer Entry Relationship(nrDatBuf = 16, nrAPU = 4, nrDatBufRsvd = 2)
+ *                            ---------------------------------------------------------------------------------
+ *                            | 00 | 01 | 02 | 03 | 04 | 05 | 06 | 07 | 08 | 09 | 0A | 0B | 0C | 0D | 0E | 0F |
+ * beatEntry(sram):           ---------------------------------------------------------------------------------
+ *                            | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 1A | 1B | 1C | 1D | 1E | 1F |
+ *                            ---------------------------------------------------------------------------------
+ * ctrlEntry(state machine):  |  0 |  1 |  2 |  3 |  4 |  5 |  6 |  7 |  8 |  9 |  A |  B |  C |  D | *E | *F | (* expressed as reservations)
+ *                            ---------------------------------------------------------------------------------
+ * apuEntrys(state machine):                                                              |  3 |  2 |  1 |  0 |
+ *                                                                                        ---------------------
+ *
+ * Req expect Atomic select logic: left to right (---->)
+ * Atomic req select logic:        right to left (<----)
+ * Reserved entries cant be used by Write(include CopyBack)
+ */
   val dbFreeVec                 = ctrlEntrys.map(_.isFree)
   val dbWithApuFreeVec          = dbFreeVec.reverse.slice(0, djparam.nrAPU)
-  val reqIsAtomic               = io.getDBID.bits.atomicVal
+  val reqIsAtomic               = io.getDBID.bits.reqIsAtomic
+  val reqIsWrite                = io.getDBID.bits.reqIsWrite
   val getDBIDId                 = Mux(reqIsAtomic, Fill(dbIdBits, 1.U(1.W)) - PriorityEncoder(dbWithApuFreeVec), PriorityEncoder(dbFreeVec))
   // receive
   io.getDBID.ready              := dbidRespQ.io.enq.ready
   dbidRespQ.io.enq.valid        := io.getDBID.valid
-  dbidRespQ.io.enq.bits.retry   := Mux(reqIsAtomic, !dbWithApuFreeVec.reduce(_ | _),  !dbFreeVec.reduce(_ | _))
+  dbidRespQ.io.enq.bits.retry   := Mux(reqIsAtomic, !dbWithApuFreeVec.reduce(_ | _), Mux(reqIsWrite, !dbFreeVec.reduce(_ | _) & getDBIDId < (djparam.nrDCURBuf - djparam.nrDatBufRsvd).U, !dbFreeVec.reduce(_ | _)))
   dbidRespQ.io.enq.bits.dbID    := getDBIDId
   dbidRespQ.io.enq.bits.to      := io.getDBID.bits.from
   dbidRespQ.io.enq.bits.entryID := io.getDBID.bits.entryID

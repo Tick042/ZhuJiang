@@ -49,6 +49,7 @@ case class DJParam(
                   dcuExtraHold:       Boolean = false,
                   // --------------------------- Data Buffer Base Mes ------------------- //
                   nrDatBuf:           Int = 32, // The number of Data Buffer entries Per PCU
+                  nrDatBufRsvd:       Int = 4, // The number of Data Buffer entries reserved
                   nrAPU:              Int = 8, // The number of Atomic Process entries Per PCU
                   // ------------------------ EXU Base Mes Per Bank ------------------ //
                   nrPipeTaskQueue:    Int = 4,
@@ -72,6 +73,8 @@ case class DJParam(
                   dirExtraHold:       Boolean = false,
                 ) {
   val nrMSHRWays = min(selfWays, sfDirWays)
+  require(nrAPU <= nrDatBuf)
+  require(nrDatBufRsvd <= nrDatBuf)
   require(min(selfSets, sfDirSets) >= nrMSHRSets)
   require(isPow2(nrDirBank))
   require(isPow2(nrMSHRSets))

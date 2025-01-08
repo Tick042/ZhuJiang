@@ -259,7 +259,9 @@ class AtomicProcessUnit()(implicit p: Parameters) extends DJModule with HasPerfL
   val dealDataVec_s3  = dealData_s3_g.asTypeOf(Vec(16, UInt(8.W)))
   outDataVec_s3.zipWithIndex.foreach {
     case(out, i) =>
-      out := Mux(firstIdx_s3_g <= i.U & i.U < lastIdx_s3_g, dealDataVec_s3(i.U - firstIdx_s3_g), inDataVec_s3_g(i))
+      val dealIdx = Wire(UInt(4.W))
+      dealIdx := i.U - firstIdx_s3_g
+      out := Mux(firstIdx_s3_g <= i.U & i.U < lastIdx_s3_g, dealDataVec_s3(dealIdx), inDataVec_s3_g(i))
   }
 
   io.out.valid      := valid_s3_g
