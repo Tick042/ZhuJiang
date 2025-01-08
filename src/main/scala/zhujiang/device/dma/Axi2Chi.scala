@@ -33,6 +33,13 @@ class Axi2Chi(node: Node)(implicit p: Parameters) extends ZJModule {
   axi.b := DontCare
   icn := DontCare
 
+  dontTouch(axi.ar)
+  dontTouch(axi.r)
+  dontTouch(axi.aw)
+  dontTouch(axi.w)
+  dontTouch(axi.b)
+  dontTouch(icn)
+
   // //SubModule
   private val axiSpilt    = Module(new AxiSpilt)
   private val chiRdE      = Module(new ChiREntrys)
