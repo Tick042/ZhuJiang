@@ -131,15 +131,15 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
    */
   // s3
   val task_s3_dbg_addr      = Wire(UInt(fullAddrBits.W))
-  task_s3_dbg_addr          := task_s3.bits.taskMes.fullAddr(io.dcuID, io.pcuID)
+  task_s3_dbg_addr          := task_s3.bits.fullAddr(io.dcuID, io.pcuID)
   if (p(DebugOptionsKey).EnableDebug) dontTouch(task_s3_dbg_addr)
   // s4_temp
   val task_s4_temp_dbg_addr = Wire(UInt(fullAddrBits.W))
-  task_s4_temp_dbg_addr     := s4_temp_g.task.taskMes.fullAddr(io.dcuID, io.pcuID)
+  task_s4_temp_dbg_addr     := s4_temp_g.task.fullAddr(io.dcuID, io.pcuID)
   if (p(DebugOptionsKey).EnableDebug) dontTouch(task_s4_temp_dbg_addr)
   // s4
   val task_s4_dbg_addr      = Wire(UInt(fullAddrBits.W))
-  task_s4_dbg_addr          := s4_g.task.taskMes.fullAddr(io.dcuID, io.pcuID)
+  task_s4_dbg_addr          := s4_g.task.fullAddr(io.dcuID, io.pcuID)
   if (p(DebugOptionsKey).EnableDebug) dontTouch(task_s4_dbg_addr)
 
 
@@ -264,13 +264,13 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
   // assert
   when(valid_s3) { assert(decode_s3.asUInt =/= Code.ERROE,
     "\n\nADDR[0x%x] DECODE ERROR: No inst match in decode table\n" +
-      "INST: CHNL[0x%x] OP[0x%x] SRC[0x%x] OTH[0x%x] HN[0x%x] RESP[0x%x] DATA[0x%x] SLV[0x%x] FWD[0x%x] MST[0x%x]\n", task_s3.bits.taskMes.fullAddr(io.dcuID, io.pcuID),
+      "INST: CHNL[0x%x] OP[0x%x] SRC[0x%x] OTH[0x%x] HN[0x%x] RESP[0x%x] DATA[0x%x] SLV[0x%x] FWD[0x%x] MST[0x%x]\n", task_s3.bits.fullAddr(io.dcuID, io.pcuID),
     inst_s3.channel, inst_s3.opcode, inst_s3.srcState, inst_s3.othState, inst_s3.hnState, inst_s3.respType, inst_s3.respHasData, inst_s3.slvResp, inst_s3.fwdState, inst_s3.mstResp) }
   when(valid_s3) { when(decode_s3.wSDir)  { assert(decode_s3.commit | (inst_s3.opcode === SnpUniqueEvict & inst_s3.channel === CHIChannel.SNP) | (isWriteX(inst_s3.opcode) & inst_s3.channel === CHIChannel.REQ) | (isReadX(inst_s3.opcode) & inst_s3.channel === CHIChannel.REQ & djparam.openDMT.asBool)) } }
   when(valid_s3) { when(decode_s3.wSFDir) { assert(decode_s3.commit | (isWriteX(inst_s3.opcode) & inst_s3.channel === CHIChannel.REQ) | (isReadX(inst_s3.opcode) & inst_s3.channel === CHIChannel.REQ & djparam.openDMT.asBool)) } }
   when(valid_s3) { assert(decode_req_s3.asUInt =/= Code.ERROE,
     "\n\nADDR[0x%x] DECODE ERROR: No inst match in decode table\n" +
-      "INST: CHNL[0x%x] OP[0x%x] SRC[0x%x] OTH[0x%x] HN[0x%x] RESP[0x%x] DATA[0x%x] SLV[0x%x] FWD[0x%x] MST[0x%x]\n", task_s3.bits.taskMes.fullAddr(io.dcuID, io.pcuID),
+      "INST: CHNL[0x%x] OP[0x%x] SRC[0x%x] OTH[0x%x] HN[0x%x] RESP[0x%x] DATA[0x%x] SLV[0x%x] FWD[0x%x] MST[0x%x]\n", task_s3.bits.fullAddr(io.dcuID, io.pcuID),
     inst_req_s3.channel, inst_req_s3.opcode, inst_req_s3.srcState, inst_req_s3.othState, inst_req_s3.hnState, inst_req_s3.respType, inst_req_s3.respHasData, inst_req_s3.slvResp, inst_req_s3.fwdState, inst_req_s3.mstResp) }
 
 
@@ -394,7 +394,8 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
   // taskSnp_s4
   taskSnp_s4.chiIndex.txnID       := s4_g.task.chiIndex.txnID
   taskSnp_s4.chiIndex.nodeID      := s4_g.task.chiIndex.nodeID
-  taskSnp_s4.chiIndex.beatOH      := "b11".U
+  taskSnp_s4.chiIndex.size        := chiFullSize.U
+  taskSnp_s4.chiIndex.offset      := 0.U
   taskSnp_s4.chiMes.channel       := CHIChannel.SNP
   taskSnp_s4.chiMes.doNotGoToSD   := true.B
   taskSnp_s4.chiMes.retToSrc      := s4_g.decode.retToSrc
@@ -423,7 +424,8 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
   taskRD_s4                       := DontCare
   taskRD_s4.chiIndex.txnID        := s4_g.task.chiIndex.txnID
   taskRD_s4.chiIndex.nodeID       := s4_g.task.chiIndex.nodeID
-  taskRD_s4.chiIndex.beatOH       := Mux(taskIsAtomic_s4 , "b11".U, s4_g.task.chiIndex.beatOH) 
+  taskRD_s4.chiIndex.size         := Mux(taskIsAtomic_s4, chiFullSize.U,     s4_g.task.chiIndex.size)
+  taskRD_s4.chiIndex.offset       := Mux(taskIsAtomic_s4, 0.U(offsetBits.W), s4_g.task.chiIndex.offset)
   taskRD_s4.chiMes.channel        := CHIChannel.REQ
   taskRD_s4.chiMes.expCompAck     := false.B
   taskRD_s4.chiMes.opcode         := s4_g.decode.rdOp
@@ -443,7 +445,8 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
    */
   taskWD_s4                       := DontCare
   taskWD_s4.chiIndex              := s4_g.task.chiIndex
-  taskWD_s4.chiIndex.beatOH       := s4_g.task.chiIndex.beatOH
+  taskWD_s4.chiIndex.size         := s4_g.task.chiIndex.size
+  taskWD_s4.chiIndex.offset       := s4_g.task.chiIndex.offset
   taskWD_s4.chiMes.channel        := CHIChannel.REQ
   taskWD_s4.chiMes.expCompAck     := false.B
   taskWD_s4.chiMes.opcode         := s4_g.decode.wdOp
@@ -473,7 +476,8 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
   readDCU_s4                        := DontCare
   readDCU_s4.chiIndex.txnID         := s4_g.task.chiIndex.txnID
   readDCU_s4.chiIndex.nodeID        := s4_g.task.chiIndex.nodeID
-  readDCU_s4.chiIndex.beatOH        := s4_g.task.chiIndex.beatOH
+  readDCU_s4.chiIndex.size          := Mux(taskIsAtomic_s4, chiFullSize.U,     s4_g.task.chiIndex.size)
+  readDCU_s4.chiIndex.offset        := Mux(taskIsAtomic_s4, 0.U(offsetBits.W), s4_g.task.chiIndex.offset)
   readDCU_s4.chiMes.channel         := CHIChannel.REQ
   readDCU_s4.chiMes.expCompAck      := false.B
   readDCU_s4.chiMes.opcode          := s4_g.decode.rdOp
@@ -495,7 +499,8 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
   val snpRespHasData                = RespType.isSnpX(s4_g.respType) & s4_g.task.respMes.slvDBID.valid & !taskIsCB_s4
   writeDCU_s4                       := DontCare
   writeDCU_s4.chiIndex              := s4_g.task.chiIndex
-  writeDCU_s4.chiIndex.beatOH       := s4_g.task.chiIndex.beatOH | Mux(snpRespHasData, "b11".U, "b00".U)
+  writeDCU_s4.chiIndex.size         := Mux(taskIsAtomic_s4 | snpRespHasData, chiFullSize.U,     s4_g.task.chiIndex.size)
+  writeDCU_s4.chiIndex.offset       := Mux(taskIsAtomic_s4 | snpRespHasData, 0.U(offsetBits.W), s4_g.task.chiIndex.offset)
   writeDCU_s4.chiMes.channel        := CHIChannel.REQ
   writeDCU_s4.chiMes.expCompAck     := false.B
   writeDCU_s4.chiMes.opcode         := s4_g.decode.wdOp
@@ -513,7 +518,8 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
    */
   taskRepl_s4                       := DontCare
   taskRepl_s4.chiIndex              := s4_g.task.chiIndex
-  taskRepl_s4.chiIndex.beatOH       := "b11".U; assert(Mux(valid_s4_g & s4_g.todo_replace, s4_g.task.chiIndex.fullSize | snpRespHasData, true.B))
+  taskRepl_s4.chiIndex.size         := chiFullSize.U; assert(Mux(valid_s4_g & s4_g.todo_replace, s4_g.task.chiIndex.fullSize | snpRespHasData, true.B))
+  taskRepl_s4.chiIndex.offset       := 0.U
   taskRepl_s4.chiMes.channel        := CHIChannel.REQ
   taskRepl_s4.chiMes.expCompAck     := false.B
   taskRepl_s4.chiMes.opcode         := Replace
@@ -529,7 +535,8 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
   * Send Flush to DCU
   */
   flush_s4                       := DontCare
-  flush_s4.chiIndex.beatOH       := "b11".U
+  flush_s4.chiIndex.size         := chiFullSize.U
+  flush_s4.chiIndex.offset       := 0.U
   flush_s4.chiMes.channel        := CHIChannel.REQ
   flush_s4.chiMes.expCompAck     := false.B
   flush_s4.chiMes.opcode         := FlushDCU
@@ -562,7 +569,8 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
    * Send Snoop Evict to RN-F
    */
   taskSnpEvict_s4                       := DontCare
-  taskSnpEvict_s4.chiIndex.beatOH       := "b11".U
+  taskSnpEvict_s4.chiIndex.size         := chiFullSize.U
+  taskSnpEvict_s4.chiIndex.offset       := 0.U
   taskSnpEvict_s4.chiMes.channel        := CHIChannel.SNP
   taskSnpEvict_s4.chiMes.doNotGoToSD    := true.B
   taskSnpEvict_s4.chiMes.retToSrc       := true.B
@@ -707,7 +715,7 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
   // S4
   val cnt_s4_g  = RegInit(0.U(64.W))
   cnt_s4_g      := Mux(!valid_s4_g | canGo_s4, 0.U, cnt_s4_g + 1.U)
-  assert(cnt_s4_g < TIMEOUT_PIPEEXU.U, "ProcessPipe[0x%x] EXECUTE ADDR[0x%x] OP[0x%x] TIMEOUT", s4_g.task.taskMes.pipeID, s4_g.task.taskMes.fullAddr(io.dcuID, io.pcuID), s4_g.task.chiMes.opcode)
+  assert(cnt_s4_g < TIMEOUT_PIPEEXU.U, "ProcessPipe[0x%x] EXECUTE ADDR[0x%x] OP[0x%x] TIMEOUT", s4_g.task.taskMes.pipeID, s4_g.task.fullAddr(io.dcuID, io.pcuID), s4_g.task.chiMes.opcode)
 
   // Other
   assert(!valid_s4_g | !todo_s4.asUInt.asBools.zip(done_s4_g.asUInt.asBools).map { case(todo, done) => !todo & done }.reduce(_ | _))

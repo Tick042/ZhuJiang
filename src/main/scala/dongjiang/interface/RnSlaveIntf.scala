@@ -178,7 +178,7 @@ class RSEntry(param: InterfaceParam)(implicit p: Parameters) extends DJBundle  {
   def isSendSnp     = entryMes.state === RSState.Snp2Node   & entryMes.nID === 0.U
   def isSendSnpIng  = entryMes.state === RSState.Snp2NodeIng
   def isLastBeat    = Mux(chiIndex.fullSize, entryMes.getBeatNum === 1.U, entryMes.getBeatNum === 0.U)
-  def fullAddr(p: UInt) = entryMes.fullAddr(entryMes.dcuID, p)
+  def fullAddr(p: UInt) = entryMes.fullAddr(entryMes.dcuID, p, chiIndex.offset)
   def snpAddr (p: UInt) = entryMes.snpAddr(entryMes.dcuID, p)
   def addrWithDcuID     = Cat(entryMes.useAddr, entryMes.dcuID)
 }
@@ -584,7 +584,8 @@ class RnSlaveIntf(param: InterfaceParam, node: Node)(implicit p: Parameters) ext
   entrySave.pcuIndex.dbID         := Mux(respVal, io.resp2Intf.bits.pcuIndex.dbID,      Mux(snpVal, io.req2Intf.bits.pcuIndex.dbID,             0.U))
   entrySave.chiIndex.txnID        := Mux(respVal, io.resp2Intf.bits.chiIndex.txnID,     Mux(snpVal, io.req2Intf.bits.chiIndex.txnID,            rxReq.bits.TxnID))
   entrySave.chiIndex.nodeID       := Mux(respVal, io.resp2Intf.bits.chiIndex.nodeID,    Mux(snpVal, io.req2Intf.bits.chiIndex.nodeID,           getUseNodeID(rxReq.bits.SrcID)))
-  entrySave.chiIndex.beatOH       := Mux(respVal, io.resp2Intf.bits.chiIndex.beatOH,    Mux(snpVal, "b11".U,                                    rxReq.bits.beatOH))
+  entrySave.chiIndex.size         := Mux(respVal, io.resp2Intf.bits.chiIndex.size,      Mux(snpVal, chiFullSize.U,                              rxReq.bits.Size))
+  entrySave.chiIndex.offset       := Mux(respVal, io.resp2Intf.bits.chiIndex.offset,    Mux(snpVal, 0.U,                                        parseFullAddr(rxReq.bits.Addr)._5))
   entrySave.chiMes.opcode         := Mux(respVal, io.resp2Intf.bits.chiMes.opcode,      Mux(snpVal, io.req2Intf.bits.chiMes.opcode,             rxReq.bits.Opcode))
   entrySave.chiMes.retToSrc       := Mux(respVal, DontCare,                             Mux(snpVal, io.req2Intf.bits.chiMes.retToSrc,           DontCare))
   entrySave.chiMes.doNotGoToSD    := Mux(respVal, DontCare,                             Mux(snpVal, io.req2Intf.bits.chiMes.doNotGoToSD,        DontCare))
@@ -593,6 +594,7 @@ class RnSlaveIntf(param: InterfaceParam, node: Node)(implicit p: Parameters) ext
   entrySave.chiMes.expCompAck     := Mux(respVal, io.resp2Intf.bits.chiMes.expCompAck,  Mux(snpVal, false.B,                                    rxReq.bits.ExpCompAck))
   assert(Mux(snpVal, io.req2Intf.bits.chiIndex.fullSize, true.B))
   assert(Mux(snpVal, io.req2Intf.bits.chiMes.isSnp, true.B))
+  assert(Mux(snpVal, io.req2Intf.bits.chiIndex.offset === 0.U, true.B))
 
 
   /*
@@ -623,7 +625,8 @@ class RnSlaveIntf(param: InterfaceParam, node: Node)(implicit p: Parameters) ext
   io.req2Exu.bits.chiMes.resp           := entrys(entrySendReqID).chiMes.resp
   io.req2Exu.bits.chiIndex.nodeID       := entrys(entrySendReqID).chiIndex.nodeID
   io.req2Exu.bits.chiIndex.txnID        := entrys(entrySendReqID).chiIndex.txnID
-  io.req2Exu.bits.chiIndex.beatOH       := entrys(entrySendReqID).chiIndex.beatOH
+  io.req2Exu.bits.chiIndex.size         := entrys(entrySendReqID).chiIndex.size
+  io.req2Exu.bits.chiIndex.offset       := entrys(entrySendReqID).chiIndex.offset
   io.req2Exu.bits.pcuMes.useAddr        := entrys(entrySendReqID).entryMes.useAddr
   // pcuIndex
   io.req2Exu.bits.to                    := entrys(entrySendReqID).entryMes.dcuID

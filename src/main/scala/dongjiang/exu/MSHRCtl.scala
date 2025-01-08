@@ -62,7 +62,7 @@ class MSHREntry(implicit p: Parameters) extends DJBundle {
 
   def useAddr   (x: UInt): UInt = { Cat(mshrMes.mTag, x.asTypeOf(UInt(mshrSetBits.W))) }
   def dirBank   (x: UInt): UInt = { getDirBank(useAddr(x)) }
-  def fullAddr  (x: UInt, d: UInt, p: UInt): UInt = getFullAddr(useAddr(x), d, p)
+  def fullAddr  (x: UInt, d: UInt, p: UInt): UInt = getFullAddr(useAddr(x), d, p, chiIndex.offset)
   def minDirSet (x: UInt): UInt = useAddr(x)(minDirSetBits - 1, 0)
 }
 

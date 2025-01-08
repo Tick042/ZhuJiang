@@ -148,7 +148,7 @@ class SMEntry(param: InterfaceParam)(implicit p: Parameters) extends DJBundle {
   }
 
   // Addr
-  def fullAddr(p: UInt) = entryMes.fullAddr(entryMes.dcuID, p, chiIndex.secBeat)
+  def fullAddr(p: UInt) = entryMes.fullAddr(entryMes.dcuID, p, chiIndex.offset)
   def reqAddr (p: UInt) : UInt = {
     val addr        = WireInit(0.U(fullAddrBits.W))
     when(entryMes.toDCU) { addr := getDCUAddress(chiIndex.secBeat, entryMes.sSet, entryMes.dirBank, entryMes.selfWay) }
@@ -369,7 +369,8 @@ class SnMasterIntf(param: InterfaceParam, node: Node)(implicit p: Parameters) ex
   entrySave.chiMes.opcode     := io.req2Intf.bits.chiMes.opcode
   entrySave.chiIndex.nodeID   := io.req2Intf.bits.chiIndex.nodeID
   entrySave.chiIndex.txnID    := io.req2Intf.bits.chiIndex.txnID
-  entrySave.chiIndex.beatOH   := io.req2Intf.bits.chiIndex.beatOH
+  entrySave.chiIndex.size     := io.req2Intf.bits.chiIndex.size
+  entrySave.chiIndex.offset   := io.req2Intf.bits.chiIndex.offset
   assert(Mux(io.req2Intf.valid, !io.req2Intf.bits.chiMes.expCompAck, true.B))
 
   /*
@@ -423,7 +424,7 @@ class SnMasterIntf(param: InterfaceParam, node: Node)(implicit p: Parameters) ex
   txReq.bits.TgtID        := entrys(entryReq2NodeID).fullTgtID(io.fIDVec)
   txReq.bits.TxnID        := Mux(entrys(entryReq2NodeID).entryMes.doDMT, entrys(entryReq2NodeID).mshrIndexTxnID, entryReq2NodeID)
   txReq.bits.SrcID        := io.hnfID
-  txReq.bits.Size         := Mux(entrys(entryReq2NodeID).chiIndex.fullSize, chiFullSize.U, chiHalfSize.U)
+  txReq.bits.Size         := entrys(entryReq2NodeID).chiIndex.size
   txReq.bits.MemAttr      := entrys(entryReq2NodeID).chiMes.resp // Multiplex MemAttr to transfer CHI State // Use in Read Req
   txReq.bits.Order        := DontCare // TODO
   //                                                                     Read With DMT                                                                                    Replcae / Flush                         Read Without DMT

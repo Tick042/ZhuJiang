@@ -216,8 +216,9 @@ trait HasDJParam extends HasParseZJParam {
   lazy val dataBits         = blockBytes * 8
   lazy val beatBits         = beatBytes * 8
   lazy val maskBits         = beatBytes
-  lazy val chiFullSize      = 6
-  lazy val chiHalfSize      = 5
+  lazy val chiFullSize      = log2Ceil(blockBytes)
+  lazy val chiHalfSize      = log2Ceil(beatBytes)
+  lazy val chiSizeWidth     = log2Ceil(chiFullSize)
 
 
   // Base Mes Parameters
@@ -317,11 +318,10 @@ trait HasDJParam extends HasParseZJParam {
     (cacheable(cacheableBits - 1, 0), ccxChipID(ccxChipBits - 1, 0), dcuBank(dcuBankBits - 1, 0), pcuBank(pcuBankBits - 1, 0), offset(offsetBits - 1, 0), useAddr)
   }
 
-  def getFullAddr(x: UInt, dcuBankID: UInt, pcuBankID: UInt, secBeat: Bool = false.B): UInt = {
+  def getFullAddr(x: UInt, dcuBankID: UInt, pcuBankID: UInt, offset: UInt): UInt = {
     require(x.getWidth == useAddrBits)
     require(dcuBankID.getWidth == dcuBankBits)
     require(pcuBankID.getWidth == pcuBankBits)
-    val offset    = Mux(secBeat, beatBytes.U(offsetBits.W), 0.U(offsetBits.W))
     val addr0     = x(bankOff - offsetBits - 1, 0)
     val addr1     = x(useAddrBits - 1, bankOff - offsetBits)
     val ccxChipID = 0.U(cacheableBits.W)

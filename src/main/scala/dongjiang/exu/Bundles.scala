@@ -36,6 +36,8 @@ class PipeTaskBundle(implicit p: Parameters) extends DJBundle  {
     val taskMes         = new DJBundle with HasUseAddr with HasPipeID with HasMSHRWay {
         val readDir     = Bool()
     }
+
+    def fullAddr(d: UInt, p:UInt) = getFullAddr(taskMes.useAddr, d, p, chiIndex.offset)
     def mshrMatch(set: Int, way: Int): Bool = taskMes.mSet === set.U & taskMes.mshrWay === way.U
 }
 

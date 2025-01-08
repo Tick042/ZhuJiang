@@ -39,8 +39,8 @@ trait HasUseAddr extends DJBundle {this: Bundle =>
   def sfSet       = parseSFAddr(useAddr)._2
   def dirBank     = parseSFAddr(useAddr)._3
   def minDirSet   = useAddr(minDirSetBits - 1, 0)
-  def fullAddr(d: UInt, p:UInt, sec: Bool = false.B) = getFullAddr(useAddr, d, p, sec)
-  def snpAddr (d: UInt, p:UInt) = fullAddr(d, p)(fullAddrBits - 1, 3)
+  def fullAddr(d: UInt, p:UInt, offset: UInt) = getFullAddr(useAddr, d, p, offset)
+  def snpAddr (d: UInt, p:UInt) = fullAddr(d, p, 0.U(offsetBits.W))(fullAddrBits - 1, 3)
 }
 
 trait HasMSHRSet extends DJBundle { this: Bundle => val mshrSet = UInt(mshrSetBits.W) }
@@ -65,8 +65,12 @@ trait HasDcuID extends DJBundle { this: Bundle => val dcuID = UInt(dcuBankBits.W
 class ChiIndexBundle(implicit p: Parameters) extends DJBundle {
   val nodeID          = UInt(useNodeIdBits.W)
   val txnID           = UInt(chiTxnIdBits.W)
-  val beatOH          = UInt(2.W)
-  def fullSize        = beatOH === "b11".U
+  val size            = UInt(chiFullSize.W)
+  val offset          = UInt(offsetBits.W)
+
+  def halfSize        = size <= 5.U
+  def fullSize        = size === 6.U
+  def beatOH          = Mux(fullSize, "b11".U, Cat(offset(offsetBits-1), !offset(offsetBits-1)))
   def fstBeat         = beatOH === "b01".U
   def secBeat         = beatOH === "b10".U
 }

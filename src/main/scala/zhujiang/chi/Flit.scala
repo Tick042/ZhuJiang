@@ -66,7 +66,6 @@ class ReqFlit(dmt:Boolean = false)(implicit p: Parameters) extends Flit {
   def StashNID = ReturnNID.get
   def DataTarget = ReturnNID.get
   def fullSize = Size === 6.U
-  def beatOH = Mux(fullSize, "b11".U, Cat(Addr(5), !Addr(5)))
 }
 
 class RespFlit(implicit p: Parameters) extends Flit {
