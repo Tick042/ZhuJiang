@@ -20,15 +20,14 @@ import xs.utils.sram.DualPortSramTemplate
  */
 
 object DBState {
-  val width       = 3
+  val width       = 2
   // FREE -> ALLOC -> FREE
   // FREE -> ALLOC -> READ(needClean)  -> READING(needClean)  -> FREE
-  // FREE -> ALLOC -> READ(!needClean) -> READING(!needClean) -> READ_DONE -> READ(needClean) -> READING(needClean) -> FREE
-  val FREE        = "b000".U
-  val ALLOC       = "b001".U
-  val READ        = "b010".U // Ready to read
-  val READING     = "b011".U // Already partially read
-  val READ_DONE   = "b100".U // Has been read all beat TODO: Del it
+  // FREE -> ALLOC -> READ(!needClean) -> READING(!needClean) -> ALLOC -> READ(needClean) -> READING(needClean) -> FREE
+  val FREE        = "b00".U
+  val ALLOC       = "b01".U
+  val READ        = "b10".U // Ready to read
+  val READING     = "b11".U // Already partially read
 }
 
 
@@ -47,8 +46,7 @@ class DBEntry(implicit p: Parameters) extends DJBundle with HasToIncoID {
   def isAlloc     = state === DBState.ALLOC
   def isRead      = state === DBState.READ
   def isReading   = state === DBState.READING
-  def isReadDone  = state === DBState.READ_DONE
-  def canRecReq   = (isAlloc | isReadDone) & (doneAtomic | !exAtomic)
+  def canRecReq   = isAlloc & (doneAtomic | !exAtomic)
 }
 
 trait HasBeatBum extends DJBundle { this: Bundle => val beatNum = UInt(1.W) }
@@ -272,26 +270,19 @@ class DataBuffer()(implicit p: Parameters) extends DJModule with HasPerfLogging 
           val read    = io.dbRCReqOpt.get.bits.isRead & hit
           val clean   = io.dbRCReqOpt.get.bits.isClean & hit
           e.state     := Mux(read, DBState.READ, Mux(clean, DBState.FREE, e.state))
+          e.rBeatNum  := 0.U
         }
         // READ
         is(DBState.READ) {
           val hit     = rBeatFire & readId === i.U & !hasReading
           val clean   = ctrlEntrys(i).needClean
-          e.state     := Mux(hit, Mux(e.isLast, Mux(clean, DBState.FREE, DBState.READ_DONE), DBState.READING), e.state)
+          e.state     := Mux(hit, Mux(e.isLast, Mux(clean, DBState.FREE, DBState.ALLOC), DBState.READING), e.state)
         }
         // READING
         is(DBState.READING) {
           val hit     = rBeatFire & readingId === i.U
           val clean   = ctrlEntrys(i).needClean
-          e.state     := Mux(hit, Mux(clean, DBState.FREE, DBState.READ_DONE), e.state)
-        }
-        // READ_DONE
-        is(DBState.READ_DONE) {
-          val hit     = io.dbRCReqOpt.get.fire & io.dbRCReqOpt.get.bits.dbID === i.U
-          val read    = io.dbRCReqOpt.get.bits.isRead & hit
-          val clean   = io.dbRCReqOpt.get.bits.isClean & hit
-          e.state     := Mux(read, DBState.READ, Mux(clean, DBState.FREE, e.state))
-          e.rBeatNum  := 0.U
+          e.state     := Mux(hit, Mux(clean, DBState.FREE, DBState.ALLOC), e.state)
         }
       }
   }
