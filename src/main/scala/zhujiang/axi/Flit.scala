@@ -7,7 +7,8 @@ case class AxiParams(
   addrBits: Int = 32,
   idBits: Int = 5,
   userBits: Int = 0,
-  dataBits: Int = 64
+  dataBits: Int = 64,
+  attr:String = ""
 )
 
 class AWFlit(params: AxiParams) extends Bundle {
@@ -16,11 +17,11 @@ class AWFlit(params: AxiParams) extends Bundle {
   val len = UInt(8.W)
   val size = UInt(3.W)
   val burst = UInt(2.W)
-  val lock = UInt(2.W)
+//  val lock = UInt(2.W)
   val cache = UInt(4.W)
-  val prot = UInt(3.W)
-  val qos = UInt(4.W)
-  val region = UInt(4.W)
+//  val prot = UInt(3.W)
+//  val qos = UInt(4.W)
+//  val region = UInt(4.W)
   val user = UInt(params.userBits.W)
 }
 
@@ -30,11 +31,11 @@ class ARFlit(params: AxiParams) extends Bundle {
   val len = UInt(8.W)
   val size = UInt(3.W)
   val burst = UInt(2.W)
-  val lock = UInt(2.W)
+//  val lock = UInt(2.W)
   val cache = UInt(4.W)
-  val prot = UInt(3.W)
-  val qos = UInt(4.W)
-  val region = UInt(4.W)
+//  val prot = UInt(3.W)
+//  val qos = UInt(4.W)
+//  val region = UInt(4.W)
   val user = UInt(params.userBits.W)
 }
 

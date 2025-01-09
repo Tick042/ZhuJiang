@@ -125,7 +125,8 @@ object ZhujiangGlobal {
           (0L, 0L)
         },
         defaultHni = if(np.nodeType == NodeType.HI) np.defaultHni else false,
-        outstanding = if(np.nodeType == NodeType.HI || np.nodeType == NodeType.CC || np.nodeType == NodeType.S) np.outstanding else 0
+        outstanding = if(np.nodeType == NodeType.HI || np.nodeType == NodeType.CC || np.nodeType == NodeType.S) np.outstanding else 0,
+        socket = np.socket
       )
       if(np.nodeType == NodeType.CC) ccId = ccId + np.cpuNum
       n
@@ -208,7 +209,6 @@ case class ZJParameters(
   clusterIdBits: Int = 8,
   bankOff: Int = 12,
   cpuSpaceBits: Int = 20,
-  cpuAsync: Boolean = true,
   snoopEjectBufDepth: Int = 5,
   reqEjectBufDepth: Int = 5,
   externalInterruptNum: Int = 32,
