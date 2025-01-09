@@ -8,16 +8,6 @@ import dongjiang.utils.StepRREncoder
 import xs.utils.perf.HasPerfLogging
 import xs.utils.sram.DualPortSramTemplate
 
-/*
- * ID Transfer:
- *
- * { dbRCReq  } Read / Clean Req To DataBuffer      { to }                { dbID }
- * { getDBID  } Get DBID Req To DataBuffer          { from }  { entryID }
- * { dbidResp } Resp With DBID From DataBuffer      { to }    { entryID } { dbID }
- * { dataTDB  } Send Data To DataBufer                                    { dbID }
- * { dataFDB  } Send Data From DataBuffer           { to }                { dbID }
- *
- */
 
 object DBState {
   val width       = 2

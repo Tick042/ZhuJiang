@@ -29,57 +29,6 @@ import xs.utils.perf.{DebugOptions, DebugOptionsKey, HasPerfLogging}
  *
  * Flush:                 [Free] -----> [Req2Node] -----> [WaitNodeDBID] -----> [Flush2Node]   -----> ([WaitNodeComp]) -----> [Resp2Exu]
  *
- *
- * ************************************************************** ID Transfer ********************************************************************************
- *
- * CHI:
- * { TgtID | SrcID | TxnID | DBID | FwdNID | FwdTxnID }
- *
- * chiIdx: CHI Index
- * { nodeID | txnID }
- *
- * pcuIdx: PCU Index
- * { from(incoID) | to(incoID) | entryID | mshrIdx(mshrWay | mshrSet) | dbID | dcuID }
- *
- *
- * Read: 
- * { Req2Intf        } Req    From Exu And Store In Intf                                                                                                    | { pcuIdx.mshrIdx = pcuIdx.mshrIdx } { pcuIdx.dcuIdx = pcuIdx.dcuIdx }
- * { Read            } Req    Send To CHI                         { TgtID = tgtID } { ReturnNID = hnfID } { ReturnTxnID = entryID }                         |
- * { CompData        } Resp   From CHI And Match With Entry ID    { TxnID == entryID }                                                                      |
- * { Resp2Exu        } Resp   Send To Exu                                                                                                                   | { pcuIdx.to = chiMes.dcuID } { pcuIdx.from = LOCALMAS } { pcuIdx.mshrIdx = mshrIdx }
- *
- *
- * Read With DMT: Not implemented in the system
- * { Req2Intf        } Req    From Exu And Store In Intf          { chiIdx.nodeID = chiIdx.nodeID } { chiIdx.txnID =  chiIdx.txnID }                        | { pcuIdx.mshrIdx = pcuIdx.mshrIdx }
- * { Read            } Req    Send To CHI                         { TgtID = chiMes.tgtID } { TxnID = Cat(chiMes.dcuID, pcuIdx.mshrIdx) } { ReturnNID = chiIdx.nodeID } { ReturnTxnID = chiIdx.txnID }
- * { Resp2Exu        } Resp   Send To Exu                                                                                                                   | { pcuIdx.to = chiMes.dcuID } { pcuIdx.from = LOCALMAS } { pcuIdx.mshrIdx = mshrIdx }
- *
- *
- * Write:
- * { Req2Intf        } Req    From Exu And Store In Intf                                                                                                    | { pcuIdx.mshrIdx = pcuIdx.mshrIdx } { pcuIdx.dbID = pcuIdx.dbID } { pcuIdx.dcuIdx = pcuIdx.dcuIdx }
- * { Write           } Req    Send To CHI                         { TgtID = tgtID } { TxnID = entryID } { ReturnNID = hnfID } { ReturnTxnID = entryID }     |
- * { DBIDResp        } Resp   From CHI And Match With Entry ID    { TxnID == entryID } { chiIdx.txnID = DBID } (Store DBID In chiIdx.txnID)                 |
- * { NCBWrData       } Data   Send To CHI                         { TgtID = tgtID } { TxnID = chiIdx.txnID }                                                |
- * { Comp            } Resp   From CHI And Match With Entry ID    { TxnID == entryID }                                                                      |
- * { Resp2Exu        } Resp   Send To Exu                                                                                                                   | { pcuIdx.to = chiMes.dcuID } { pcuIdx.from = LOCALMAS } { pcuIdx.mshrIdx = mshrIdx }
- *
- *
- * Write With DWT: TODO
- * { Req2Intf        } Req    From Exu And Store In Intf          { chiIdx.nodeID = chiIdx.nodeID } { chiIdx.txnID =  chiIdx.txnID }                        | { pcuIdx.mshrIdx = pcuIdx.mshrIdx } { pcuIdx.dcuIdx = pcuIdx.dcuIdx }
- * { Write           } Req    Send To CHI                         { TgtID = tgtID } { TxnID = entryID } { ReturnNID = chiIdx.nodeID } { ReturnTxnID = chiIdx.txnID } |
- * { Comp            } Resp   From CHI And Match With Entry ID    { TxnID == entryID }                                                                      |
- * { Resp2Exu        } Resp   Send To Exu                                                                                                                   | { pcuIdx.to = chiMes.dcuID } { pcuIdx.from = LOCALMAS } { pcuIdx.mshrIdx = mshrIdx }
- *
- * Replace:
- * { Req2Intf        } Req    From Exu And Store In Intf                                                                                                    | { pcuIdx.mshrIdx = pcuIdx.mshrIdx } { pcuIdx.dbID = pcuIdx.dbID } { pcuIdx.dcuIdx = pcuIdx.dcuIdx }
- * { Write           } Req    Send To CHI                         { TgtID = ddrcID } { TxnID = entryID } { ReturnNID = hnfID } { ReturnTxnID = entryID }    |
- * { DBIDResp        } Resp   From CHI And Match With Entry ID    { TxnID == entryID } { chiIdx.txnID = DBID } (Store DBID In chiIdx.txnID)                 |
- * { Replace         } Req    Send To CHI                         { TgtID = tgtID } { TxnID = entryID } { ReturnTxnID = chiIdx.txnID }                      |
- * { NCBWrData       } Data   Send To CHI                         { TgtID = tgtID } { TxnID = chiIdx.txnID }                                                |
- * { Comp            } Resp   From CHI And Match With Entry ID    { TxnID == entryID }                                                                      |
- * { Resp2Exu        } Resp   Send To Exu                                                                                                                   | { pcuIdx.to = chiMes.dcuID } { pcuIdx.from = LOCALMAS } { pcuIdx.mshrIdx = mshrIdx }
- *
- *
  */
 
 object SMState {

@@ -74,65 +74,6 @@ import xs.utils.perf.{DebugOptions, DebugOptionsKey, HasPerfLogging}
  * [------]           | [------]                 | [------]
  * [------]           | [------]                 | [------]
  *
- *
- * ************************************************************** ID Transfer ********************************************************************************
- *
- * CHI:
- * { TgtID | SrcID | TxnID | DBID | FwdNID | FwdTxnID }
- *
- * chiIdx: CHI Index
- * { nodeID | txnID }
- *
- * pcuIdx: PCU Index
- * { from(incoID) | to(incoID) | entryID | mshrIdx(mshrWay | mshrSet) | dbID | dcuID }
- *
- *
- * Read / Dataless:
- * { Read / Dataless } TxReq  From CHI And Store In Intf          { chiIdx.nodeID = SrcID } { chiIdx.txnID = TxnID }                                        |
- * { Req2Exu         } Req    From Intf And Send To EXU           { chiIdx.nodeID = SrcID } { chiIdx.txnID = TxnID }                                        | { pcuIdx.to = chiMes.dcuID } { pcuIdx.from = LOCALSLV } { pcuIdx.entryID = entryID }
- * { ReqAck          } ReqAck From EXU and Match With Entry ID                                                                                              | { pcuIdx.entryID == entryID }
- * { Resp2Intf       } Resp   From EXU And Store In Intf          { chiIdx.nodeID = tgtID } { chiIdx.txnID = txnID }                                        | { pcuIdx.dbID = pcuIdx.dbID }
- * { Comp(Data)      } RxRsp  Send To CHI                         { TgtID = chiIdx.nodeID } { TxnID = chiIdx.txnID } { HomeNID = hnfID } { DBID = entryID } |
- * { CompAck         } TxRsp  From CHI And Match With Entry ID    { TxnID == entryID }                                                                      |
- *
- *
- * Read with DMT: TODO
- * { Read            } TxReq  From CHI And Store In Intf          { chiIdx.nodeID = SrcID } { chiIdx.txnID = TxnID }                                        |
- * { Req2Exu         } Req    From Intf And Send To EXU           { chiIdx.nodeID = SrcID } { chiIdx.txnID = TxnID }                                        | { pcuIdx.to = chiMes.dcuID } { pcuIdx.from = LOCALSLV } { pcuIdx.entryID = entryID }
- * { ReqAck          } ReqAck From EXU and Match With Entry ID                                                                                              | { pcuIdx.entryID == entryID }
- * { CompAck         } TxRsp  From CHI And Send Resp To EXU                                                                                                 | { pcuIdx.to = TxnID.head } { pcuIdx.mshrIdx = TxnID.tail }
- *
- *
- * Write:
- * { Write           } TxReq  From CHI And Store In Intf          { chiIdx.nodeID = SrcID } { chiIdx.txnID = TxnID }                                        |
- * { CompDBIDResp    } RxRsp  Send To CHI                         { TgtID = chiIdx.nodeID } { TxnID = chiIdx.txnID } { DBID = entryID }                     |
- * { CBWriteData     } TxRat  From CHI And Match With Entry ID    { TxnID == entryID }                                                                      |
- * { Req2Exu         } Req    From Intf And Send To EXU                                                                                                     | { pcuIdx.to = chiMes.dcuID } { pcuIdx.incfrom = LOCALSLV } { pcuIdx.entryID = entryID } { pcuIdx.dbID = pcuIdx.dbID }
- * { ReqAck          } ReqAck From EXU and Match With Entry ID                                                                                              | { pcuIdx.entryID == entryID }
- *
- *
- * Write with DWT: Not implemented in the system
- * { Write           } TxReq  From CHI And Store In Intf          { chiIdx.nodeID = SrcID } { chiIdx.txnID = TxnID }                                        |
- * { Req2Exu         } Req    From Intf And Send To EXU           { chiIdx.nodeID = SrcID } { chiIdx.txnID = TxnID }                                        | { pcuIdx.to = chiMes.dcuID } { pcuIdx.from = LOCALSLV } { pcuIdx.entryID = entryID }
- * { ReqAck          } ReqAck From EXU and Match With Entry ID                                                                                              | { pcuIdx.entryID == entryID }
- *
- *
- * Snoop:
- * { Req2Node        } Req    From EXU And Store In Intf                                                                                                    | { pcuIdx.snpVec = idx.snpVec } { pcuIdx.mshrIdx = pcuIdx.mshrIdx }
- * { Snoop           } Req    Send To CHI                         { TgtID = snpID } { TxnID = entryID }                                                     |
- * { SnResp(Data)    } Resp   From CHI And Match With Entry ID    { TxnID == entryID }                                                                      |
- * { Resp2Exu        } Resp   Send To EXU                                                                                                                   | { pcuIdx.to = chiMes.dcuID } { pcuIdx.from = LOCALSLV } { pcuIdx.mshrIdx = mshrIdx }
- *
- *
- * Snoop with DCT: TODO
- * { Req2Node        } Req    From EXU And Store In Intf        { chiIdx.nodeID =  chiIdx.nodeID } { chiIdx.txnID =  chiIdx.txnID }                         | { pcuIdx.snpVec = idx.snpVec } { pcuIdx.mshrIdx = pcuIdx.mshrIdx }
- * { Snoop           } Req    Send To CHI                         { TgtID = snpID } { TxnID = entryID }                                                     |
- * { SnResp          } Resp   From CHI And Match With Entry ID    { TxnID == entryID }                                                                      |
- * { SnoopFwd        } Req    Send To CHI                         { TgtID = snpID } { TxnID = entryID } { FwdNID = chiIdx.nodeID } { FwdTxnID = chiIdx.txnID }
- * { SnpResp(Data)Fwded } Resp From CHI And Match With Entry ID   { TxnID == entryID }                                                                      |
- * { Resp2Exu        } Resp   Send To EXU                                                                                                                   | { pcuIdx.to = chiMes.dcuID } { pcuIdx.from = LOCALSLV } { pcuIdx.mshrIdx = mshrIdx } { pcuIdx.dbID = pcuIdx.dbID }
- *
- *
  */
 
 object RSState {
