@@ -32,9 +32,10 @@ abstract class IntfBaseIO(param: InterfaceParam, node: Node)(implicit p: Paramet
     // for debug, only use in SnMaster
     val chi_tx_req_bits_DbgAddr = if (p(DebugOptionsKey).EnableDebug) { Some(Output(UInt(fullAddrBits.W))) } else None
 
-
     def req2Exu         = req2ExuOpt.get
     def reqAck2Intf     = reqAck2IntfOpt.get
     def resp2Intf       = resp2IntfOpt.get
   })
+
+  if (p(DebugOptionsKey).EnableDebug) { io.chi_tx_req_bits_DbgAddr.get := DontCare }
 }

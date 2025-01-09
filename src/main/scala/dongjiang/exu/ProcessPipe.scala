@@ -15,6 +15,7 @@ import org.chipsalliance.cde.config._
 import xs.utils.ParallelLookUp
 import xs.utils.perf.{DebugOptions, DebugOptionsKey}
 import xs.utils.perf.HasPerfLogging
+import dongjiang.utils.StepRREncoderOH
 
 
 class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
@@ -37,9 +38,6 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
     // Resp To Node
     val resp2Intf   = Decoupled(new Resp2IntfBundle())
   })
-
-  // TODO: Delete the following code when the coding is complete
-  dontTouch(io)
 
 // --------------------- Modules declaration ------------------------//
   val taskQ   = Module(new Queue(new PipeTaskBundle(), entries = djparam.nrPipeTaskQueue, pipe = false, flow = false))
@@ -182,7 +180,7 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
    */
   val s2Fire            = taskQ.io.deq.fire
   valid_s3              := Mux(task_s3.bits.taskMes.readDir, task_s3.valid & dirRes_s3.valid, task_s3.valid)
-  canGo_s3              := !valid_s4_temp_g
+  canGo_s3              := valid_s3 & !valid_s4_temp_g
 
 
 // ---------------------------------------------------------------------------------------------------------------------- //
@@ -208,6 +206,7 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
   /*
    * Set Inst value
    */
+  val hasData_s3      = task_s3.bits.respMes.slvDBID.valid | task_s3.bits.respMes.mstDBID.valid
   val taskIsWriPtl_s3 = isWriXPtl(task_s3.bits.chiMes.opcode) & task_s3.bits.chiMes.isReq
   val taskIsWriUni_s3 = isWriUniX(task_s3.bits.chiMes.opcode) & task_s3.bits.chiMes.isReq
   val taskIsCMO_s3    = isCMO(task_s3.bits.chiMes.opcode)     & task_s3.bits.chiMes.isReq
@@ -216,23 +215,24 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
 
   assert(Mux(taskIsWriPtl_s3 & task_s3.valid, !task_s3.bits.respMes.slvResp.valid, true.B))
   assert(Mux(taskIsWriPtl_s3 & task_s3.valid, task_s3.bits.respMes.slvDBID.valid, true.B))
-  assert(Mux(taskIsAtomic_s3 & task_s3.valid, (task_s3.bits.taskMes.pipeID === PipeID.REQ & task_s3.bits.respMes.slvDBID.valid) | (task_s3.bits.taskMes.pipeID === PipeID.RESP & inst_s3.respHasData), true.B))
+  assert(Mux(taskIsAtomic_s3 & task_s3.valid, hasData_s3, true.B))
   assert(Mux(taskIsAtomic_s3 & task_s3.valid, !isAtomicStoreX(task_s3.bits.chiMes.opcode), true.B))
 
 
-  inst_s3.channel     := task_s3.bits.chiMes.channel
-  inst_s3.opcode      := Mux(taskIsAtomic_s3, AtomicLoadADD, task_s3.bits.chiMes.opcode) // When the task is an atomic operation, it is converted to AtomicLoadADD for decoding.
-  inst_s3.srcState    := Mux(task_s3.bits.taskMes.readDir, srcState_s3, ChiState.I)
-  inst_s3.othState    := Mux(task_s3.bits.taskMes.readDir, othState_s3, ChiState.I)
-  inst_s3.hnState     := Mux(task_s3.bits.taskMes.readDir, hnState_s3,  ChiState.I)
-  inst_s3.respType    := Cat(taskIsCB_s3 & task_s3.bits.respMes.slvResp.valid,   // Copy Back Resp
-                             task_s3.bits.respMes.mstResp.valid,              // Read Down Resp
-                             task_s3.bits.respMes.fwdState.valid,             // Snoop Fwd Resp
-                             task_s3.bits.respMes.slvResp.valid & !taskIsCB_s3)  // Snoop Resp
-  inst_s3.slvResp     := task_s3.bits.respMes.slvResp.bits
-  inst_s3.fwdState    := task_s3.bits.respMes.fwdState.bits
-  inst_s3.mstResp     := task_s3.bits.respMes.mstResp.bits
-  inst_s3.respHasData := task_s3.bits.respMes.slvDBID.valid | task_s3.bits.respMes.mstDBID.valid
+  inst_s3.channel       := task_s3.bits.chiMes.channel
+  inst_s3.opcode        := Mux(taskIsAtomic_s3, AtomicLoadADD, task_s3.bits.chiMes.opcode) // When the task is an atomic operation, it is converted to AtomicLoadADD for decoding.
+  inst_s3.srcState      := Mux(task_s3.bits.taskMes.readDir, srcState_s3, ChiState.I)
+  inst_s3.othState      := Mux(task_s3.bits.taskMes.readDir, othState_s3, ChiState.I)
+  inst_s3.hnState       := Mux(task_s3.bits.taskMes.readDir, hnState_s3,  ChiState.I)
+  inst_s3.respType      := Cat(taskIsCB_s3 & task_s3.bits.respMes.slvResp.valid,   // Copy Back Resp
+                               task_s3.bits.respMes.mstResp.valid,              // Read Down Resp
+                               task_s3.bits.respMes.fwdState.valid,             // Snoop Fwd Resp
+                               task_s3.bits.respMes.slvResp.valid & !taskIsCB_s3)  // Snoop Resp
+  inst_s3.slvResp       := task_s3.bits.respMes.slvResp.bits
+  inst_s3.fwdState      := task_s3.bits.respMes.fwdState.bits
+  inst_s3.mstResp       := task_s3.bits.respMes.mstResp.bits
+  inst_s3.reqWithData   := hasData_s3 & task_s3.bits.taskMes.pipeID === PipeID.REQ
+  inst_s3.respWithData  := hasData_s3 & task_s3.bits.taskMes.pipeID === PipeID.RESP
 
 
   /*
@@ -264,14 +264,14 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
   // assert
   when(valid_s3) { assert(decode_s3.asUInt =/= Code.ERROE,
     "\n\nADDR[0x%x] DECODE ERROR: No inst match in decode table\n" +
-      "INST: CHNL[0x%x] OP[0x%x] SRC[0x%x] OTH[0x%x] HN[0x%x] RESP[0x%x] DATA[0x%x] SLV[0x%x] FWD[0x%x] MST[0x%x]\n", task_s3.bits.fullAddr(io.dcuID, io.pcuID),
-    inst_s3.channel, inst_s3.opcode, inst_s3.srcState, inst_s3.othState, inst_s3.hnState, inst_s3.respType, inst_s3.respHasData, inst_s3.slvResp, inst_s3.fwdState, inst_s3.mstResp) }
+      "INST: CHNL[0x%x] OP[0x%x] SRC[0x%x] OTH[0x%x] HN[0x%x] REQDATA[0x%x] RESP[0x%x] RESPDATA[0x%x] SLV[0x%x] FWD[0x%x] MST[0x%x]\n", task_s3.bits.fullAddr(io.dcuID, io.pcuID),
+    inst_s3.channel, inst_s3.opcode, inst_s3.srcState, inst_s3.othState, inst_s3.hnState, inst_s3.reqWithData, inst_s3.respType, inst_s3.respWithData, inst_s3.slvResp, inst_s3.fwdState, inst_s3.mstResp) }
   when(valid_s3) { when(decode_s3.wSDir)  { assert(decode_s3.commit | (inst_s3.opcode === SnpUniqueEvict & inst_s3.channel === CHIChannel.SNP) | (isWriteX(inst_s3.opcode) & inst_s3.channel === CHIChannel.REQ) | (isReadX(inst_s3.opcode) & inst_s3.channel === CHIChannel.REQ & djparam.openDMT.asBool)) } }
   when(valid_s3) { when(decode_s3.wSFDir) { assert(decode_s3.commit | (isWriteX(inst_s3.opcode) & inst_s3.channel === CHIChannel.REQ) | (isReadX(inst_s3.opcode) & inst_s3.channel === CHIChannel.REQ & djparam.openDMT.asBool)) } }
   when(valid_s3) { assert(decode_req_s3.asUInt =/= Code.ERROE,
     "\n\nADDR[0x%x] DECODE ERROR: No inst match in decode table\n" +
-      "INST: CHNL[0x%x] OP[0x%x] SRC[0x%x] OTH[0x%x] HN[0x%x] RESP[0x%x] DATA[0x%x] SLV[0x%x] FWD[0x%x] MST[0x%x]\n", task_s3.bits.fullAddr(io.dcuID, io.pcuID),
-    inst_req_s3.channel, inst_req_s3.opcode, inst_req_s3.srcState, inst_req_s3.othState, inst_req_s3.hnState, inst_req_s3.respType, inst_req_s3.respHasData, inst_req_s3.slvResp, inst_req_s3.fwdState, inst_req_s3.mstResp) }
+      "INST: CHNL[0x%x] OP[0x%x] SRC[0x%x] OTH[0x%x] HN[0x%x] REQDATA[0x%x] RESP[0x%x] RESPDATA[0x%x] SLV[0x%x] FWD[0x%x] MST[0x%x]\n", task_s3.bits.fullAddr(io.dcuID, io.pcuID),
+    inst_req_s3.channel, inst_req_s3.opcode, inst_req_s3.srcState, inst_req_s3.othState, inst_req_s3.hnState, inst_s3.reqWithData, inst_req_s3.respType, inst_req_s3.respWithData, inst_req_s3.slvResp, inst_req_s3.fwdState, inst_req_s3.mstResp) }
 
 
 // ---------------------------------------------------------------------------------------------------------------------- //
@@ -285,7 +285,7 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
   inst_req_s3.srcState    := inst_s3.srcState
   inst_req_s3.othState    := inst_s3.othState
   inst_req_s3.hnState     := inst_s3.hnState
-  inst_req_s3.respHasData := taskIsAtomic_s3 | taskIsWriUni_s3 // TODO: respHasData maybe different from resppipe to reqpipe, therefore, resppipe may get error SNPTYPE(SnpTgt)
+  inst_req_s3.reqWithData := taskIsAtomic_s3 | taskIsWriUni_s3 // TODO: Dont use the req type directly for judgment
   inst_req_s3.respType    := RespType.NotResp
 
   /*
@@ -295,7 +295,7 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
   val rnHitWithoutSrc = rnHitVec_s3.zipWithIndex.map { case(hit, i) => hit & i.U =/= srcMetaID_s3 }
   when(decode_req_s3.snpTgt === SnpTgt.ALL)       { snpNodeVec_s3 := rnHitVec_s3 }
   .elsewhen(decode_req_s3.snpTgt === SnpTgt.OTH)  { snpNodeVec_s3 := rnHitWithoutSrc }
-  .elsewhen(decode_req_s3.snpTgt === SnpTgt.ONE)  { snpNodeVec_s3 := PriorityEncoderOH(rnHitWithoutSrc) } // TODO: Can be Optimized
+  .elsewhen(decode_req_s3.snpTgt === SnpTgt.ONE)  { snpNodeVec_s3 := StepRREncoderOH(rnHitWithoutSrc, canGo_s3 & decode_req_s3.snpTgt === SnpTgt.ONE).asBools }
   .otherwise                                      { snpNodeVec_s3 := 0.U.asTypeOf(snpNodeVec_s3) }
   // assert
   when(valid_s3 & decode_s3.snoop){
@@ -318,7 +318,7 @@ class ProcessPipe(implicit p: Parameters) extends DJModule with HasPerfLogging {
    *
    */
   todo_s3_retry       := todo_s3.wSDir & dirRes_s3.bits.s.replRetry | todo_s3.wSFDir & dirRes_s3.bits.sf.replRetry; assert(Mux(valid_s3, !todo_s3_retry, true.B), "TODO")
-  todo_s3_replace     := todo_s3.wSDir & !hnHit_s3 & !dirRes_s3.bits.s.metaVec(0).isInvalid & !todo_s3_retry // TODO: Only need to replace when it is Dirty
+  todo_s3_replace     := todo_s3.wSDir & !hnHit_s3 & dirRes_s3.bits.s.metaVec(0).isDirty & !todo_s3_retry // Only need to replace when it is Dirty
   todo_s3_sfEvict     := todo_s3.wSFDir & !srcHit_s3 & !othHit_s3 & dirRes_s3.bits.sf.metaVec.map(!_.isInvalid).reduce(_ | _) & !todo_s3_retry
   todo_s3_updMSHR     := decode_s3.needWaitSlv | decode_s3.needWaitMst | todo_s3_replace | todo_s3_sfEvict
   todo_s3_cleanMSHR   := !(todo_s3_retry | todo_s3_updMSHR)

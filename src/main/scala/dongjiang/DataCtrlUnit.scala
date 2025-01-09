@@ -16,6 +16,7 @@ import xs.utils.perf.{DebugOptions, DebugOptionsKey, HasPerfLogging}
 import xijiang.router.base.DeviceIcnBundle
 import xs.utils.sram._
 import dongjiang.utils.FastArb._
+import dongjiang.utils.StepRREncoder
 import xs.utils.debug.{DomainInfo, HardwareAssertion}
 
 /*
@@ -219,15 +220,17 @@ class DataCtrlUnit(nodes: Seq[Node])(implicit p: Parameters) extends DJRawModule
   val willSendRVec          = rBufRegVec.map { case r => r.state === DCURState.ReadSram      & sramRReadyVec(r.dsBank) & rRespQ.io.enq.ready }
   val willSendReplVec       = wBufRegVec.map { case r => r.replRState === DCURState.ReadSram & sramRReadyVec(r.dsBank) & rRespQ.io.enq.ready }
   val willSendWVec          = wBufRegVec.map { case w => w.state === DCUWState.WriteSram     & sramWReadyVec(w.dsBank) & w.canWrite}
-
-  val sramWID               = PriorityEncoder(willSendWVec) // TODO: dont use PriorityEncoder
-  val sramRID               = PriorityEncoder(willSendRVec) // TODO: dont use PriorityEncoder
-  val sramReplID            = PriorityEncoder(willSendReplVec) // TODO: dont use PriorityEncoder
   val sramRead              = willSendRVec.reduce(_ | _)
   val sramRepl              = !sramRead & willSendReplVec.reduce(_ | _)
 
   val sramRFire             = dsVec.map(_.map(_.io.read.fire).reduce(_ | _)).reduce(_ | _); HardwareAssertion(PopCount(dsVec.map(_.map(_.io.read.fire).reduce(_ | _))) <= 1.U, cf"")
   val sramWFire             = dsVec.map(_.map(_.io.write.fire).reduce(_ | _)).reduce(_ | _); HardwareAssertion(PopCount(dsVec.map(_.map(_.io.write.fire).reduce(_ | _))) <= 1.U, cf"")
+
+  val sramWID               = StepRREncoder(willSendWVec, sramWFire)
+  val sramRID               = StepRREncoder(willSendRVec, sramRFire)
+  val sramReplID            = StepRREncoder(willSendReplVec, sramRFire & !sramRead)
+
+
   dsVec.zipWithIndex.foreach {
     case (ds, i) =>
       ds.zipWithIndex.foreach {

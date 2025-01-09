@@ -47,7 +47,6 @@ trait HasChiResp { this: Bundle =>
 class CHIRespBundle extends Bundle with HasChiResp
 
 object ChiState {
-  // TODO: Delete [U/S]
   val width = 3
 
   // [U/S] + [D/C] + [V/I]
@@ -92,7 +91,7 @@ object CHIChannel {
 
 trait HasCHIChannel {
   this: Bundle =>
-  val channel = UInt(CHIChannel.width.W) // TODO: Del it because unuse
+  val channel = UInt(CHIChannel.width.W)
 
   def isReq = channel === CHIChannel.REQ
   def isDat = channel === CHIChannel.DAT

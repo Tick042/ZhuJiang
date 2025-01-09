@@ -42,7 +42,6 @@ object LocalReadDecode {
     LocalReqInst(ReadNotSharedDirty, I, SC, SD) -> (ReadDCU  | ReadOp(ReadNoSnp)        | Resp(ChiResp.SC)),
 
     // ----------------------------------------------------------- LOCAL RESP ------------------------------------------------------------//
-    // TODO: Consider a variation of the SC/SD mapping as UC/SD In Local
     //  I  I  I
     LocalRespInst(REQ, ReadNotSharedDirty,  I,  I,  I, Read, HasData, sn = ChiResp.UC)      -> (Commit | RDB2Src | CleanDB | WSFDir |         RespOp(CompData) | RespChnl(DAT) | Resp(ChiResp.UC)    | HnState(I)  | SrcState(UC) | OthState(I)),
     LocalRespInst(REQ, ReadNotSharedDirty,  I,  I,  I, Read,          sn = ChiResp.UC)      -> (                             WSFDir |                                                                  HnState(I)  | SrcState(UC) | OthState(I)),
@@ -100,7 +99,6 @@ object LocalReadDecode {
 
 
     // ----------------------------------------------------------- LOCAL RESP ---------------------------------------------------------------//
-    // TODO: Consider a variation of the SC/SD mapping as UC/SD In Local
     //  I  I  I
     LocalRespInst(REQ, ReadUnique,  I,  I,  I, Read,   HasData, sn = ChiResp.UC)      -> (Commit | RDB2Src | CleanDB | WSFDir |         RespOp(CompData) | RespChnl(DAT) | Resp(ChiResp.UC)    | HnState(I)  | SrcState(UC) | OthState(I)),
     LocalRespInst(REQ, ReadUnique,  I,  I,  I, Read,            sn = ChiResp.UC)      -> (                             WSFDir |                                                                  HnState(I)  | SrcState(UC) | OthState(I)),
@@ -159,7 +157,6 @@ object LocalReadDecode {
     LocalReqInst(ReadOnce,  I, SC, SD) -> (ReadDCU  | ReadOp(ReadNoSnp) | Resp(ChiResp.I)),
 
     // ----------------------------------------------------------- LOCAL RESP ---------------------------------------------------------------//
-    // TODO: Consider a variation of the SC/SD mapping as UC/SD In Local
     //  I  I  I
     LocalRespInst(REQ, ReadOnce,  I,  I,  I, Read,   HasData, sn = ChiResp.UC)     -> (Commit | RDB2Src | CleanDB | RespOp(CompData) | RespChnl(DAT) | Resp(ChiResp.I)),
     LocalRespInst(REQ, ReadOnce,  I,  I,  I, Read,            sn = ChiResp.UC)     -> NothingTODO,
@@ -210,7 +207,6 @@ object LocalReadWithDCTDecode {
     LocalReqInst(ReadNotSharedDirty, I, SC, SD) -> (ReadDCU  | ReadOp(ReadNoSnp)        | Resp(ChiResp.SC)),
 
     // ----------------------------------------------------------- LOCAL RESP ------------------------------------------------------------//
-    // TODO: Consider a variation of the SC/SD mapping as UC/SD In Local
     //  I  I  I
     LocalRespInst(REQ, ReadNotSharedDirty,  I,  I,  I, Read,    HasData, sn = ChiResp.UC)                       -> (Commit | RDB2Src | CleanDB | WSFDir |         RespOp(CompData) | RespChnl(DAT) | Resp(ChiResp.UC)    | HnState(I)  | SrcState(UC) | OthState(I)),
     LocalRespInst(REQ, ReadNotSharedDirty,  I,  I,  I, Read,             sn = ChiResp.UC)                       -> (                             WSFDir |                                                                  HnState(I)  | SrcState(UC) | OthState(I)),
@@ -248,10 +244,12 @@ object LocalReadWithDCTDecode {
 
   def readUnique: Seq[(UInt, UInt)] = Seq(
     // ----------------------------------------------------------- LOCAL REQ ----------------------------------------------------------------//
+    // CHI-G B4.8.3.4: Home is permitted to send the SnpUniqueFwd snoop to an RN-F in Shared state if Home determines that the Invalidating snoop needs to be sent to only one cache.
+    // TODO: Consider SnpUniqueFwd can be send in SnpOth
     LocalReqInst(ReadUnique,  I, I,   I) -> (ReadDown | ReadOp(ReadNoSnp)),
     LocalReqInst(ReadUnique,  I, UC,  I) -> (SnpOth   | SnpOp(SnpUniqueFwd)),
     LocalReqInst(ReadUnique,  I, UD,  I) -> (SnpOth   | SnpOp(SnpUniqueFwd)),
-    LocalReqInst(ReadUnique,  I, SC,  I) -> (SnpOth   | SnpOp(SnpUnique)  | RetToSrc | SnpNeedDB), // TODO: consider SnpUniqueFwd and add check snoop number logic in RnSlave
+    LocalReqInst(ReadUnique,  I, SC,  I) -> (SnpOth   | SnpOp(SnpUnique)  | RetToSrc | SnpNeedDB),
     LocalReqInst(ReadUnique,  I, I,  UC) -> (ReadDCU  | ReadOp(ReadNoSnp) | Resp(ChiResp.UC)),
     LocalReqInst(ReadUnique,  I, I,  UD) -> (ReadDCU  | ReadOp(ReadNoSnp) | Resp(ChiResp.UD_PD)),
     LocalReqInst(ReadUnique,  I, I,  SC) -> (ReadDCU  | ReadOp(ReadNoSnp) | Resp(ChiResp.UC)),
@@ -268,7 +266,6 @@ object LocalReadWithDCTDecode {
 
 
     // ----------------------------------------------------------- LOCAL RESP ---------------------------------------------------------------//
-    // TODO: Consider a variation of the SC/SD mapping as UC/SD In Local
     //  I  I  I
     LocalRespInst(REQ, ReadUnique,  I,  I,  I, Read,   HasData, sn = ChiResp.UC)                      -> (Commit | RDB2Src | CleanDB | WSFDir |         RespOp(CompData) | RespChnl(DAT) | Resp(ChiResp.UC)    | HnState(I)  | SrcState(UC) | OthState(I)),
     LocalRespInst(REQ, ReadUnique,  I,  I,  I, Read,            sn = ChiResp.UC)                      -> (                             WSFDir |                                                                  HnState(I)  | SrcState(UC) | OthState(I)),
@@ -328,7 +325,6 @@ object LocalReadWithDCTDecode {
     LocalReqInst(ReadOnce,  I, SC, SD) -> (ReadDCU  | ReadOp(ReadNoSnp) | Resp(ChiResp.I)),
 
     // ----------------------------------------------------------- LOCAL RESP ---------------------------------------------------------------//
-    // TODO: Consider a variation of the SC/SD mapping as UC/SD In Local
     //  I  I  I
     LocalRespInst(REQ, ReadOnce,  I,  I,  I, Read,   HasData, sn = ChiResp.UC)      -> (Commit | RDB2Src | CleanDB | RespOp(CompData) | RespChnl(DAT) | Resp(ChiResp.I)),
     LocalRespInst(REQ, ReadOnce,  I,  I,  I, Read,            sn = ChiResp.UC)      -> NothingTODO,

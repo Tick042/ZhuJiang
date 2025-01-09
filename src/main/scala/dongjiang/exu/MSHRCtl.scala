@@ -90,9 +90,6 @@ class MSHRCtl()(implicit p: Parameters) extends DJModule with HasPerfLogging {
     val mshrResp2Dir  = Vec(2, Valid(new MSHRRespDirBundle()))
   })
 
-  // TODO: Delete the following code when the coding is complete
-  dontTouch(io)
-
   // ------------------------ Module declaration ------------------------- //
   val reqAck_s0_q           = Module(new Queue(new ReqAck2IntfBundle(), entries = nrBankPerPCU, flow = false, pipe = true))
 
@@ -167,7 +164,6 @@ class MSHRCtl()(implicit p: Parameters) extends DJModule with HasPerfLogging {
 
   /*
    * Receive Req From Node and Determine if it needs retry
-   * TODO: Setting blocking timer
    */
   reqAck_s0_q.io.enq.valid        := io.req2Exu.valid
   reqAck_s0_q.io.enq.bits.retry   := !canReceiveReq
@@ -367,9 +363,9 @@ class MSHRCtl()(implicit p: Parameters) extends DJModule with HasPerfLogging {
   // --------------------------------------------- S0: Get task_s0 from MSHR ---------------------------------------------- //
   // ---------------------------------------------------------------------------------------------------------------------- //
   /*
-   * Get Can Send Set From Dir Read Ready and mshrLockVecReg
+   * Get Can Send Set From Dir Read Ready
    */
-  // TODO: if dont need to read Dir, it should not be ctrl by mshrLockVecReg
+  // TODO: if dont need to read Dir, it should not be ctrl by mshr selfLock and othLock
   mshrTableReg.zip(reqWillSendVecVec).zipWithIndex.foreach  { case((m, v), i) => m.zip(v).foreach { case(m, v) => v := m.reqBeSend  & io.dirRReadyVec(m.dirBank(i.U)) } }
   mshrTableReg.zip(respWillSendVecVec).zipWithIndex.foreach { case((m, v), i) => m.zip(v).foreach { case(m, v) => v := m.respBeSend & io.dirRReadyVec(m.dirBank(i.U)) } }
 

@@ -36,6 +36,16 @@ object StepRREncoder {
   }
 }
 
+object StepRREncoderOH {
+  def apply(in: Seq[Bool], enable: Bool): UInt = {
+    val stepRREncoder = Module(new StepRREncoder(in.size))
+    stepRREncoder.io.inVec.zip(in).foreach { case(a, b) => a := b }
+    stepRREncoder.io.enable := enable
+    UIntToOH(stepRREncoder.io.outIdx)
+  }
+}
+
+
 object RREncoder {
   def apply(in: Seq[Bool]): UInt = {
     val arb = Module(new ResetRRArbiter(UInt(log2Ceil(in.size).W), in.size))

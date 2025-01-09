@@ -11,7 +11,6 @@ import xs.utils.sram.DualPortSramTemplate
 /*
  * ID Transfer:
  *
- *
  * { dbRCReq  } Read / Clean Req To DataBuffer      { to }                { dbID }
  * { getDBID  } Get DBID Req To DataBuffer          { from }  { entryID }
  * { dbidResp } Resp With DBID From DataBuffer      { to }    { entryID } { dbID }
@@ -29,7 +28,7 @@ object DBState {
   val ALLOC       = "b001".U
   val READ        = "b010".U // Ready to read
   val READING     = "b011".U // Already partially read
-  val READ_DONE   = "b100".U // Has been read all beat
+  val READ_DONE   = "b100".U // Has been read all beat TODO: Del it
 }
 
 
@@ -64,9 +63,6 @@ class DataBuffer()(implicit p: Parameters) extends DJModule with HasPerfLogging 
 // --------------------- IO declaration ------------------------//
   val io = IO(Flipped(new DBBundle(hasDBRCReq = true)))
 
-  // Del it
-  dontTouch(io)
-
   val apu           = Module(new AtomicProcessUnit())
 
 // --------------------- Reg and Wire declaration ------------------------//
@@ -82,7 +78,8 @@ class DataBuffer()(implicit p: Parameters) extends DJModule with HasPerfLogging 
   val dbidRespQ     = Module(new Queue(new DBIDResp(), entries = 1, flow = false, pipe = true))
   val rBeatCanGo    = WireInit(false.B); dontTouch(rBeatCanGo)
   val readingReg    = RegInit(false.B)
-
+  // Ensure that the order of dataFDB Out is equal to the order of dbRCReq In
+  val readIdQ       = Module(new Queue(UInt(dbIdBits.W), entries = 4, flow = false, pipe = false))
 
 // ---------------------------------------------------------------------------------------------------------------------- //
 // -------------------------------------------------- GetDBID & DBIDResp ------------------------------------------------ //
@@ -167,7 +164,12 @@ class DataBuffer()(implicit p: Parameters) extends DJModule with HasPerfLogging 
     assert(Mux(io.dbRCReqOpt.get.bits.isRead, io.dbRCReqOpt.get.bits.rBeatOH =/= 0.U, true.B))
     assert(Mux(io.dbRCReqOpt.get.bits.exAtomic, !ctrlEntrys(io.dbRCReqOpt.get.bits.dbID).doneAtomic, true.B))
   }
-  io.dbRCReqOpt.get.ready := ctrlEntrys(io.dbRCReqOpt.get.bits.dbID).canRecReq
+  val canRecReq           = ctrlEntrys(io.dbRCReqOpt.get.bits.dbID).canRecReq
+  readIdQ.io.enq.valid    := canRecReq & io.dbRCReqOpt.get.valid & io.dbRCReqOpt.get.bits.isRead
+  readIdQ.io.enq.bits     := io.dbRCReqOpt.get.bits.dbID
+  io.dbRCReqOpt.get.ready := canRecReq & readIdQ.io.enq.ready
+  // assert
+  assert(Mux(io.dbRCReqOpt.get.bits.isRead, !(io.dbRCReqOpt.get.fire ^ readIdQ.io.enq.fire), !readIdQ.io.enq.valid))
   when(io.dbRCReqOpt.get.valid) {
     assert(!ctrlEntrys(io.dbRCReqOpt.get.bits.dbID).isFree)
     assert(!(io.dbRCReqOpt.get.bits.exAtomic & io.dbRCReqOpt.get.bits.isClean))
@@ -176,18 +178,20 @@ class DataBuffer()(implicit p: Parameters) extends DJModule with HasPerfLogging 
 // ---------------------------------------------------------------------------------------------------------------------- //
 // ---------------------------------------------------- DATA TO NODE ---------------------------------------------------- //
 // ---------------------------------------------------------------------------------------------------------------------- //
-  // TODO: Ensure that the order of dataFDB Out is equal to the order of dbRCReq In
   // Reading
   val readingVec  = ctrlEntrys.map(_.isReading)
   val readingId   = PriorityEncoder(readingVec)
   val hasReading  = readingVec.reduce(_ | _)
   // Read
-  val readVec     = ctrlEntrys.map(_.isRead)
-  val readId      = StepRREncoder(readVec, !hasReading & rBeatCanGo)
+  val readId      = Mux(readIdQ.io.deq.valid, readIdQ.io.deq.bits, 0.U)
   // Select
   val selReadId   = Mux(hasReading, readingId, readId)
-  val readVal     = readVec.reduce(_ | _) | readingVec.reduce(_ | _)
+  val readVal     = readIdQ.io.deq.valid | readingVec.reduce(_ | _)
+  // readIdQ deq ready
+  readIdQ.io.deq.ready  := !hasReading & rBeatCanGo
+  // assert
   assert(PopCount(readingVec) <= 1.U)
+  assert(Mux(readIdQ.io.deq.valid, ctrlEntrys(readId).isRead, true.B))
 
 
   /*

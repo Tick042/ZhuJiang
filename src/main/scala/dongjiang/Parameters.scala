@@ -24,8 +24,8 @@ case class InterfaceParam
   lazy val entryIdBits  = log2Ceil(nrEntry)
   lazy val isSn         = !isRn
   lazy val isMaster     = !isSlave
-  lazy val hasReq2exu   = isRn // TODO: CSN
-  lazy val hasDBRCReq   = isMaster // TODO: CSN
+  lazy val hasReq2exu   = isRn
+  lazy val hasDBRCReq   = isMaster
 }
 
 
@@ -101,7 +101,7 @@ trait HasParseZJParam extends HasZJParams {
   require(localHnfNodes.nonEmpty)
   require(zjParams.localRing.filter(_.mainMemory).length == 1)
 
-  // TODO: Get CSN
+  // TODO: Support CSN
   lazy val hasCSN           = false
   lazy val ccxChipBits      = 3
 
@@ -208,7 +208,7 @@ trait HasParseZJParam extends HasZJParams {
 
 trait HasDJParam extends HasParseZJParam {
   val p: Parameters
-  val djparam = p(ZJParametersKey).djParams //TODO: use lazy val in all parameters
+  val djparam = p(ZJParametersKey).djParams
 
   lazy val chiTxnIdBits = 12
 
@@ -313,10 +313,6 @@ trait HasDJParam extends HasParseZJParam {
     val ccxChipID = x       >> fullAddrBits - (ccxChipBits + cacheableBits)
     val cacheable = x       >> fullAddrBits - cacheableBits
     val useAddr   = Cat(x(fullAddrBits - (ccxChipBits + cacheableBits) - 1, bankOff + fullBankBits), x(bankOff - 1, offsetBits)); require(useAddr.getWidth == useAddrBits)
-    // Additional check:
-    // assert(cacheable === 0.U)
-    // assert(ccxChipID === 0.U) // TODO: CSN
-    // assert(offset === 0.U)
     // return: [1:cacheable] [2:ccxChipID] [3:dcuBank] [4:pcuBank] [5:offset] [6:useAddr]
     (cacheable(cacheableBits - 1, 0), ccxChipID(ccxChipBits - 1, 0), dcuBank(dcuBankBits - 1, 0), pcuBank(pcuBankBits - 1, 0), offset(offsetBits - 1, 0), useAddr)
   }

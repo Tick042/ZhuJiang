@@ -11,7 +11,6 @@ import dongjiang.utils.FastArb._
 class ExecuteUnit(implicit p: Parameters) extends DJModule {
 // --------------------- IO declaration ------------------------//
   val io = IO(new Bundle {
-    val valid           = Input(Bool())
     val dcuID           = Input(UInt(dcuBankBits.W))
     val pcuID           = Input(UInt(pcuBankBits.W))
     // Intf <> Exu

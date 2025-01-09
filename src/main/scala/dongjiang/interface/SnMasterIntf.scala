@@ -42,7 +42,7 @@ import xs.utils.perf.{DebugOptions, DebugOptionsKey, HasPerfLogging}
  * { from(incoID) | to(incoID) | entryID | mshrIdx(mshrWay | mshrSet) | dbID | dcuID }
  *
  *
- * Read: TODO: When using Read without DMT need to make sure that the RnSlave does not fill up the DataBuffer.
+ * Read: 
  * { Req2Intf        } Req    From Exu And Store In Intf                                                                                                    | { pcuIdx.mshrIdx = pcuIdx.mshrIdx } { pcuIdx.dcuIdx = pcuIdx.dcuIdx }
  * { Read            } Req    Send To CHI                         { TgtID = tgtID } { ReturnNID = hnfID } { ReturnTxnID = entryID }                         |
  * { CompData        } Resp   From CHI And Match With Entry ID    { TxnID == entryID }                                                                      |
@@ -168,9 +168,6 @@ class SMEntry(param: InterfaceParam)(implicit p: Parameters) extends DJBundle {
 }
 
 class SnMasterIntf(param: InterfaceParam, node: Node)(implicit p: Parameters) extends IntfBaseIO(param, node) with HasPerfLogging {
-  // Del it
-  io <> DontCare
-  dontTouch(io)
 // --------------------- Reg and Wire declaration ------------------------//
   val entrys          = RegInit(VecInit(Seq.fill(param.nrEntry) { 0.U.asTypeOf(new SMEntry(param)) }))
   // Intf Receive Req ID

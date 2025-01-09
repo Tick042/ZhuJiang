@@ -181,7 +181,6 @@ class ProtocolCtrlUnit(localHf: Node, csnRf: Option[Node] = None, csnHf: Option[
 
 
   // rx data
-  // TODO: can be optimize by data directly send to data buffer
   val rxDataQ                             = Module(new Queue(new DataFlit(), 2)) // Adding queues for timing considerations
   rxDataQ.io.enq                          <> io.toLocal.rx.data.get
   localSnMaster.io.chi.rx.data.get.valid  := rxDataQ.io.deq.valid & fromSnNode(rxDataQ.io.deq.bits.asTypeOf(new DataFlit()).SrcID)
@@ -230,8 +229,7 @@ class ProtocolCtrlUnit(localHf: Node, csnRf: Option[Node] = None, csnHf: Option[
     io.toCSNOpt.get.rn <> csnRnMasterOpt.get.io.chi
   }
 
-  // TODO: Xbar -> Ring
-
+  // TODO: change Xbar -> Ring
   /*
    * Connect Intf <-> Xbar
    */
@@ -277,8 +275,6 @@ class ProtocolCtrlUnit(localHf: Node, csnRf: Option[Node] = None, csnHf: Option[
     case (exu, i) =>
       exu.io.dcuID                    := i.U
       exu.io.pcuID                    := io.pcuID
-      // TODO: Lower Power Ctrl
-      exu.io.valid                    := true.B
       // slice ctrl signals
       xbar.io.req2Exu.out(i)          <> exu.io.req2Exu
       xbar.io.reqAck2Intf.in(i)       <> exu.io.reqAck2Intf

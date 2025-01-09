@@ -21,14 +21,15 @@ import xs.utils.perf.{DebugOptions, DebugOptionsKey, HasPerfLogging}
  * Req Expect Write And Atomic
  * Req Retry:             [Free]  -----> [Req2Exu] -----> [WaitExuAck] ---retry---> [Req2Exu]
  * Req Receive:           [Free]  -----> [Req2Exu] -----> [WaitExuAck] --receive--> ([waitSendRRec]) -----> [Free]
- *
+ *                                           ^
  *
  * Amotic Retry:          [Free]  -----> [GetDBID] -----> [WaitDBID] -----> [DBIDResp2Node] -----> [WaitData] -----> [Req2Exu] -----> [WaitExuAck] ---retry---> [Req2Exu]
  * Atomic:                [Free]  -----> [GetDBID] -----> [WaitDBID] -----> [DBIDResp2Node] -----> [WaitData] -----> [Req2Exu] -----> [WaitExuAck] --receive--> [Free]
- *
+ *                                           ^
  *
  * Write Retry:           [Free]  -----> [GetDBID] -----> [WaitDBID] -----> [DBIDResp2Node] -----> [WaitData] -----> [Req2Exu] -----> [WaitExuAck] ---retry---> [Req2Exu]
  * Write:                 [Free]  -----> [GetDBID] -----> [WaitDBID] -----> [DBIDResp2Node] -----> [WaitData] -----> [Req2Exu] -----> [WaitExuAck] --receive--> [WaitCompAck] -----> [Free]
+ *                                                                                                                       ^
  *
  * Read / Dataless / Atomic Resp:  [Free]  -----> [Resp2Node] -----> ([WaitCompAck]) -----> [Free]
  * CopyBack Resp:                  [Free]  -----> [GetDBID] -----> [WaitDBID] -----> [DBIDResp2Node] -----> [WaitData] -----> [Resp2Node] -----> [Free]
@@ -36,7 +37,9 @@ import xs.utils.perf.{DebugOptions, DebugOptionsKey, HasPerfLogging}
  *
  * Snoop Need Data:       [Free]  -----> [GetDBID] -----> [WaitDBID] -----> [Snp2Node] -----> ([Snp2NodeIng]) -----> [WaitSnpResp] -----> [Resp2Exu]
  * Snoop No Need Data:    [Free]                   ----->                   [Snp2Node] -----> ([Snp2NodeIng]) -----> [WaitSnpResp] -----> [Resp2Exu]
+ *                                                                              ^
  *
+ * ( ^ is NID block point)
  *
  * ************************************************************** Entry Transfer ********************************************************************************
  * Req / Write / Atomic:
@@ -175,7 +178,7 @@ class RSEntry(param: InterfaceParam)(implicit p: Parameters) extends DJBundle  {
   def isReqBeSend   = entryMes.state === RSState.Req2Exu    & entryMes.nID === 0.U
   def isRspBeSend   = (entryMes.state === RSState.Resp2Node & (chiMes.isRsp | (chiMes.isReq & isWriUniX(chiMes.opcode)))) | entryMes.state === RSState.DBIDResp2Node | entryMes.needSendRRec
   def isDatBeSend   = entryMes.state === RSState.Resp2Node  & chiMes.isDat
-  def isGetDBID     = entryMes.state === RSState.GetDBID    & entryMes.nID === 0.U
+  def isGetDBID     = entryMes.state === RSState.GetDBID    & (entryMes.nID === 0.U | !isWriUniX(chiMes.opcode))
   def isSendSnp     = entryMes.state === RSState.Snp2Node   & entryMes.nID === 0.U
   def isSendSnpIng  = entryMes.state === RSState.Snp2NodeIng
   def isLastBeat    = Mux(chiIndex.fullSize, entryMes.getBeatNum === 1.U, entryMes.getBeatNum === 0.U)
@@ -188,9 +191,6 @@ class RSEntry(param: InterfaceParam)(implicit p: Parameters) extends DJBundle  {
 
 
 class RnSlaveIntf(param: InterfaceParam, node: Node)(implicit p: Parameters) extends IntfBaseIO(param, node) with HasPerfLogging  {
-  // Del it
-  io <> DontCare
-  dontTouch(io)
 // --------------------- Reg and Wire declaration ------------------------//
   val entrys            = RegInit(VecInit(Seq.fill(param.nrEntry) { 0.U.asTypeOf(new RSEntry(param)) }))
   // ENTRY Receive Task ID
@@ -447,7 +447,7 @@ class RnSlaveIntf(param: InterfaceParam, node: Node)(implicit p: Parameters) ext
         }
         // State: GetDBID
         is(RSState.GetDBID) {
-          val hit       = io.dbSigs.getDBID.fire & entryGetDBID === i.U; assert(Mux(hit, entrys(i).entryMes.nID === 0.U, true.B), "RNSLV ENTRY[0x%x] ADDR[0x%x] STATE[0x%x]", i.U, entrys(i).fullAddr(io.pcuID), entrys(i).state) // TODO: Consider Write can go no sorting required
+          val hit       = io.dbSigs.getDBID.fire & entryGetDBID === i.U; assert(Mux(hit, entrys(i).entryMes.nID === 0.U, true.B), "RNSLV ENTRY[0x%x] ADDR[0x%x] STATE[0x%x]", i.U, entrys(i).fullAddr(io.pcuID), entrys(i).state)
           state         := Mux(hit, RSState.WaitDBID, state)
         }
         // State: WaitDBID
@@ -621,6 +621,7 @@ class RnSlaveIntf(param: InterfaceParam, node: Node)(implicit p: Parameters) ext
    * Send Req To Node
    */
   io.req2Exu.valid                      := reqBeSendVec.reduce(_ | _)
+  io.req2Exu.bits                       := DontCare
   io.req2Exu.bits.chiMes.channel        := entrys(entrySendReqID).chiMes.channel
   io.req2Exu.bits.chiMes.opcode         := entrys(entrySendReqID).chiMes.opcode
   io.req2Exu.bits.chiMes.expCompAck     := entrys(entrySendReqID).chiMes.expCompAck
@@ -787,6 +788,7 @@ class RnSlaveIntf(param: InterfaceParam, node: Node)(implicit p: Parameters) ext
   val dmtDcuID                          = rxRsp.bits.TxnID(dcuBankBits + mshrSetBits + mshrWayBits - 1, mshrSetBits + mshrWayBits)
 
   io.resp2Exu.valid                     := respBeSendVec.reduce(_ | _) | dmtCompVal
+  io.resp2Exu.bits                      := DontCare
   io.resp2Exu.bits.from                 := param.intfID.U
   io.resp2Exu.bits.to                   := Mux(dmtCompVal, dmtDcuID,    entrys(entryResp2ExuID).entryMes.dcuID)
   io.resp2Exu.bits.pcuIndex.mshrSet     := Mux(dmtCompVal, dmtMshrSet,  entrys(entryResp2ExuID).entryMes.mSet)
@@ -825,8 +827,7 @@ class RnSlaveIntf(param: InterfaceParam, node: Node)(implicit p: Parameters) ext
     // TgtID
     assert(rxReq.bits.TgtID === io.hnfID)
     // ExpCompAck
-    assert(Mux(isReadX(rxReq.bits.Opcode) & rxReq.bits.Opcode =/= ReadOnce, rxReq.bits.ExpCompAck, true.B)) // TODO: need more power check
-    assert(Mux(isWriUniX(rxReq.bits.Opcode),    rxReq.bits.ExpCompAck, true.B)) // TODO: need more power check
+    assert(Mux(isReadX(rxReq.bits.Opcode) | isWriUniX(rxReq.bits.Opcode), rxReq.bits.ExpCompAck, true.B))
     // Order
     assert(Mux(isWriUniX(rxReq.bits.Opcode),    rxReq.bits.Order === Order.OWO & rxReq.bits.ExpCompAck,
            Mux(rxReq.bits.Opcode === ReadOnce,  rxReq.bits.Order === Order.EndpointOrder, rxReq.bits.Order === Order.None)))
