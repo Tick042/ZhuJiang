@@ -39,6 +39,19 @@ target("TestSct")
     set_values("cfg.lua_main", "./unitest/SingleChannelTap.lua")
     set_values("cfg.build_dir_name", "TestSct")
 
+target("TestClb")
+    add_rules("verilua")
+    add_toolchains("@verilator")
+
+    add_files(
+        build_dir .. "/Clb/*.sv",
+        "./common/*.lua"
+    )
+
+    set_values("cfg.top", "C2cLoopBack")
+    set_values("cfg.lua_main", "./unitest/C2cLoopBack.lua")
+    set_values("cfg.build_dir_name", "TestClb")
+
 task("verdi", function ()
   set_menu {
     usage = "xmake verdi [options]",
@@ -56,7 +69,8 @@ task("verdi", function ()
     sim_dir = path.join(sim_dir, option.get("case"))
 
     os.cd(sim_dir)
-    local cmds = "verdi -ssf test.vcd.fsdb"
+    local cmds = "verdi -ssf test.vcd.fsdb -nologo"
+    if os.exists("verdi.sh") then os.rm("verdi.sh") end
     io.writefile("verdi.sh", cmds)
     print(cmds)
     os.execv(os.shell(), { "verdi.sh" })
