@@ -24,9 +24,9 @@ class ZhujiangTopConfig extends Config((site, here, up) => {
   case ZJParametersKey => ZJParameters(
     localNodeParams = Seq(
       NodeParam(nodeType = NodeType.S, bankId = 0, splitFlit = true),
-      NodeParam(nodeType = NodeType.CC, cpuNum = 2, splitFlit = true, outstanding = 8, attr = "nanhu"),
+      NodeParam(nodeType = NodeType.CC, cpuNum = 2, splitFlit = true, outstanding = 8, attr = "nanhu", socket = "async"),
       NodeParam(nodeType = NodeType.HF, bankId = 0, splitFlit = true),
-      NodeParam(nodeType = NodeType.CC, cpuNum = 2, splitFlit = true, outstanding = 8, attr = "nanhu"),
+      NodeParam(nodeType = NodeType.CC, cpuNum = 2, splitFlit = true, outstanding = 8, attr = "nanhu", socket = "c2c"),
       NodeParam(nodeType = NodeType.S, bankId = 1, splitFlit = true),
       NodeParam(nodeType = NodeType.HI, defaultHni = true, splitFlit = true, attr = "cfg"),
       NodeParam(nodeType = NodeType.RI, attr = "dma", splitFlit = true),
@@ -81,7 +81,7 @@ object ZhujiangTop extends App {
     FirtoolOption("--lowering-options=noAlwaysComb," +
       " disallowLocalVariables, disallowMuxInlining," +
       " emittedLineLength=120, explicitBitcast, locationInfoStyle=plain"),
-    ChiselGeneratorAnnotation(() => new Zhujiang()(config))
+    ChiselGeneratorAnnotation(() => new Zhujiang(true)(config))
   ))
   if(config(ZJParametersKey).tfbParams.isDefined) TrafficBoardFileManager.release(config)
   FileRegisters.write()

@@ -32,7 +32,8 @@ case class NodeParam(
   cpuNum: Int = 1, // Only applied in CC
   addressRange: (Long, Long) = (0L, 0L), // Only applied in HNI
   defaultHni: Boolean = false, // Only applied in HNI
-  outstanding: Int = 16 // Only applied in HNI
+  outstanding: Int = 16, // Only applied in HNI
+  socket: String = "sync"
 )
 
 case class Node(
@@ -53,7 +54,8 @@ case class Node(
   clusterId: Int = 0, //Only applied in CCN
   addressRange: (Long, Long) = (0L, 0L), // Only applied in HNI
   defaultHni: Boolean = false, // Only applied in HNI
-  outstanding: Int = 16 // Only applied in HNI, CCN and SN
+  outstanding: Int = 16, // Only applied in HNI, CCN and SN
+  socket: String = "sync"
 ) {
   require(NodeType.min <= nodeType && nodeType <= NodeType.max)
 

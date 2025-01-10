@@ -13,7 +13,7 @@ import zhujiang.chi.{DatOpcode, DataFlit, ReqFlit, RespFlit}
 class AxiLiteBridge(node: Node, busDataBits: Int, tagOffset: Int)(implicit p: Parameters) extends ZJModule {
   private val compareTagBits = 16
   require(node.nodeType == NodeType.HI)
-  private val axiParams = AxiParams(idBits = log2Ceil(node.outstanding), dataBits = busDataBits, addrBits = raw)
+  private val axiParams = AxiParams(idBits = log2Ceil(node.outstanding), dataBits = busDataBits, addrBits = raw, attr = node.attr)
 
   val icn = IO(new DeviceIcnBundle(node))
   val axi = IO(new AxiBundle(axiParams))

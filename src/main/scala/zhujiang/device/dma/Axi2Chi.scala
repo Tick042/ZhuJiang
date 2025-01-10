@@ -24,7 +24,7 @@ case class DmaParams(
 class Axi2Chi(node: Node)(implicit p: Parameters) extends ZJModule {
   require(node.nodeType == NodeType.RI)
   private val dmaParams = zjParams.dmaParams
-  private val axiParams = AxiParams(dataBits = dw, addrBits = raw, idBits = dmaParams.idBits)
+  private val axiParams = AxiParams(dataBits = dw, addrBits = raw, idBits = dmaParams.idBits, attr = node.attr)
   val axi = IO(Flipped(new AxiBundle(axiParams)))
   val icn = IO(new DeviceIcnBundle(node))
 

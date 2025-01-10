@@ -3,20 +3,21 @@ package zhujiang
 import chisel3._
 import chisel3.experimental.hierarchy.{Definition, Instance}
 import chisel3.util._
-import chisel3.experimental.{ChiselAnnotation, annotate}
 import org.chipsalliance.cde.config.Parameters
-import xijiang.{Node, NodeType, Ring}
+import xijiang.{NodeType, Ring}
 import dongjiang.pcu._
 import dongjiang.dcu._
-import zhujiang.chi.ChiBuffer
-import xijiang.router.base.{DeviceIcnBundle, IcnBundle}
-import xs.utils.debug.HardwareAssertion
+import xijiang.router.base.IcnBundle
+import xs.utils.debug.{DomainInfo, HardwareAssertion}
 import xs.utils.sram.SramBroadcastBundle
 import xs.utils.{DFTResetSignals, ResetGen}
 import zhujiang.axi.AxiBundle
-import zhujiang.device.async.{DeviceIcnAsyncBundle, IcnAsyncBundle, IcnSideAsyncModule}
+import zhujiang.device.bridge.axilite.AxiLiteBridge
+import zhujiang.device.socket.{SocketIcnSide, SocketIcnSideBundle}
 import zhujiang.device.ddr.MemoryComplex
+import zhujiang.device.dma.Axi2Chi
 import zhujiang.device.reset.ResetDevice
+
 import scala.math.pow
 
 class DftWires extends Bundle {
@@ -24,7 +25,7 @@ class DftWires extends Bundle {
   val func = new SramBroadcastBundle
 }
 
-class Zhujiang(implicit p: Parameters) extends ZJModule {
+class Zhujiang(isTop:Boolean = false)(implicit p: Parameters) extends ZJModule with NocIOHelper {
   require(p(ZJParametersKey).tfsParams.isEmpty)
 
   print(
@@ -41,7 +42,7 @@ class Zhujiang(implicit p: Parameters) extends ZJModule {
        |""".stripMargin)
 
   private val localRing = Module(new Ring(true))
-  val dft = IO(Input(new DftWires))
+  private val dft = Wire(new DftWires)
   localRing.dfx_reset := dft.reset
   localRing.clock := clock
 
@@ -55,6 +56,16 @@ class Zhujiang(implicit p: Parameters) extends ZJModule {
     rstGen.o_reset
   }
 
+  private def placeSocket(pfx:String, icn: IcnBundle, idx:Option[Int]): SocketIcnSide = {
+    icn.resetInject.foreach(_ := DontCare)
+    val pfxStr = s"${pfx}_${idx.map(_.toString).getOrElse("")}"
+    val dev = Module(new SocketIcnSide(icn.node))
+    dev.io.icn <> icn
+    dev.reset := placeResetGen(pfxStr, icn)
+    dev.suggestName(s"${pfxStr}_socket")
+    dev
+  }
+
   require(localRing.icnHis.get.count(_.node.attr == "ddr_cfg") == 1)
   require(localRing.icnSns.get.count(_.node.attr == "ddr_data") == 1)
   private val memCfgIcn = localRing.icnHis.get.filter(_.node.attr == "ddr_cfg").head
@@ -64,43 +75,48 @@ class Zhujiang(implicit p: Parameters) extends ZJModule {
   memSubSys.io.icn.mem <> memDatIcn
   memSubSys.reset := placeResetGen(s"ddr", memCfgIcn)
 
-  require(localRing.icnHis.get.count(_.node.defaultHni) == 1)
-  require(localRing.icnRis.get.count(_.node.attr == "dma") == 1)
+  require(localRing.icnHis.get.count(_.node.attr == "main") == 1)
+  require(localRing.icnRis.get.count(_.node.attr == "main") == 1)
   require(localRing.icnHis.get.length == 2)
 
-  private val socCfgIcn = localRing.icnHis.get.filter(_.node.defaultHni).head
-  private val socDmaIcn = localRing.icnRis.get.filter(n => n.node.attr == "dma").head
-  private val socCfgDev = Module(new IcnSideAsyncModule(socCfgIcn.node))
-  private val socDmaDev = Module(new IcnSideAsyncModule(socDmaIcn.node))
-  socCfgDev.io.icn <> socCfgIcn
-  socDmaDev.io.icn <> socDmaIcn
-  socCfgDev.reset := placeResetGen(s"soc", socCfgIcn)
-  socDmaDev.reset := socCfgDev.reset
+  private val cfgIcnSeq = localRing.icnHis.get.filterNot(_.node.attr == "ddr_cfg")
+  require(cfgIcnSeq.nonEmpty)
+  require(cfgIcnSeq.count(_.node.defaultHni) == 1)
+  private val cfgDevSeq = cfgIcnSeq.zipWithIndex.map({case(icn, idx) =>
+    val default = icn.node.defaultHni
+    val pfxStr = if(default) "cfg_default" else s"cfg_$idx"
+    val cfg = Module(new AxiLiteBridge(icn.node, 64, 3))
+    cfg.icn <> icn
+    cfg.reset := placeResetGen(pfxStr, icn)
+    cfg
+  })
+
+  private val dmaIcnSeq = localRing.icnRis.get
+  require(dmaIcnSeq.nonEmpty)
+  private val dmaDevSeq = dmaIcnSeq.zipWithIndex.map({case(icn, idx) =>
+    val pfxStr = s"dma_$idx"
+    val dma = Module(new Axi2Chi(icn.node))
+    dma.icn <> icn
+    dma.reset := placeResetGen(pfxStr, icn)
+    dma.suggestName(pfxStr)
+    dma
+  })
 
   private val resetDev = Module(new ResetDevice)
   resetDev.clock := clock
   resetDev.reset := reset
-  socCfgIcn.resetInject.get := resetDev.io.resetInject
-  resetDev.io.resetState := socCfgIcn.resetState.get
+  private val defaultCfg = cfgIcnSeq.filter(_.node.defaultHni).head
+  defaultCfg.resetInject.get := resetDev.io.resetInject
+  resetDev.io.resetState := defaultCfg.resetState.get
 
   require(localRing.icnCcs.get.nonEmpty)
   private val ccnIcnSeq = localRing.icnCcs.get
-  private val ccnAysncDevSeq = if(p(ZJParametersKey).cpuAsync) Some(ccnIcnSeq.map(icn => Module(new IcnSideAsyncModule(icn.node)))) else None
-  private val ccnSyncDevSeq = if(p(ZJParametersKey).cpuAsync) None else Some(ccnIcnSeq.map(icn => Module(new ChiBuffer(icn.node))))
-  for(i <- ccnIcnSeq.indices) {
-    val domainId = ccnIcnSeq(i).node.domainId
-    ccnAysncDevSeq.foreach(devs => devs(i).io.icn <> ccnIcnSeq(i))
-    ccnSyncDevSeq.foreach(devs => devs(i).io.in <> ccnIcnSeq(i))
-    ccnAysncDevSeq.foreach(devs => devs(i).reset := placeResetGen(s"cc_$domainId", ccnIcnSeq(i)))
-    ccnSyncDevSeq.foreach(devs => devs(i).reset := placeResetGen(s"cc_$domainId", ccnIcnSeq(i)))
-  }
+  private val ccnSocketSeq = ccnIcnSeq.map(icn => placeSocket("cc", icn, Some(icn.node.domainId)))
 
   require(localRing.icnHfs.get.nonEmpty)
   private val pcuIcnSeq = localRing.icnHfs.get
   private val pcuDef = Definition(new ProtocolCtrlUnit(pcuIcnSeq.head.node)) // TODO: There's a risk here
   private val pcuDevSeq = pcuIcnSeq.map(icn => Instance(pcuDef))
-  private val nrPCU = localRing.icnHfs.get.length
-  private val nrDCU = localRing.icnSns.get.filterNot(_.node.mainMemory).length
   for(i <- pcuIcnSeq.indices) {
     val bankId = pcuIcnSeq(i).node.bankId
     pcuDevSeq(i).io.hnfID := pcuIcnSeq(i).node.nodeId.U
@@ -137,74 +153,56 @@ class Zhujiang(implicit p: Parameters) extends ZJModule {
   }
   private val assertionNode = HardwareAssertion.placePipe(Int.MaxValue)
   val io = IO(new Bundle {
-    val ddr = new AxiBundle(memSubSys.io.ddr.params)
-    val soc = new SocIcnBundle(socCfgDev.io.icn.node, socDmaDev.io.icn.node)
-    val ccn = MixedVec(ccnIcnSeq.map(cc => new CcnIcnBundle(cc.node)))
     val chip = Input(UInt(nodeAidBits.W))
     val onReset = Output(Bool())
     val assertionOut = Output(assertionNode.assertion.cloneType)
+    val dft = Input(new DftWires)
   })
-  dontTouch(io.assertionOut)
-  HardwareAssertion.setTopNode(assertionNode)
+  dft := io.dft
+  val ddrDrv = memSubSys.io.ddr
+  val cfgDrv = cfgDevSeq.map(_.axi)
+  val dmaDrv = dmaDevSeq.map(_.axi)
+  val ccnDrv = ccnSocketSeq.map(_.io.socket)
+  runIOAutomation()
+  ccnSocketSeq.foreach(_.io.chip.foreach(_.local := io.chip))
+
   io.assertionOut := assertionNode.assertion
   io.onReset := resetDev.io.onReset
-  io.ddr <> memSubSys.io.ddr
-  io.soc.cfg <> socCfgDev.io.async
-  io.soc.dma <> socDmaDev.io.async
-  io.soc.reset := socCfgDev.reset
   localRing.io_chip := io.chip
-  for(i <- io.ccn.indices) {
-    io.ccn(i).async.foreach(_ <> ccnAysncDevSeq.get(i).io.async)
-    io.ccn(i).sync.foreach(_ <> ccnSyncDevSeq.get(i).io.out)
-    if(p(ZJParametersKey).cpuAsync) {
-      io.ccn(i).reset := ccnAysncDevSeq.get(i).reset
-    } else {
-      io.ccn(i).reset := ccnSyncDevSeq.get(i).reset
-    }
-  }
-  HardwareAssertion.release("misc")
+  dontTouch(io.assertionOut)
+  HardwareAssertion.setTopNode(assertionNode)
+  val assertionInfo = DomainInfo(assertionNode.desc)
+  if(isTop) HardwareAssertion.release("hwa")
 }
 
-class CcnIcnBundle(val node:Node)(implicit p:Parameters) extends Bundle {
-  val async = if(p(ZJParametersKey).cpuAsync) Some(new IcnAsyncBundle(node)) else None
-  val sync = if(p(ZJParametersKey).cpuAsync) None else Some(new IcnBundle(node))
-  val reset = Output(AsyncReset())
-  def <>(that: CcnDevBundle):Unit = {
-    this.async.foreach(_ <> that.async.get)
-    this.sync.foreach(_ <> that.sync.get)
-    that.reset := this.reset
-  }
-}
+trait NocIOHelper {
+  def p: Parameters
+  def ddrDrv: AxiBundle
+  def cfgDrv: Seq[AxiBundle]
+  def dmaDrv: Seq[AxiBundle]
+  def ccnDrv: Seq[SocketIcnSideBundle]
 
-class CcnDevBundle(val node:Node)(implicit p:Parameters) extends Bundle {
-  val async = if(p(ZJParametersKey).cpuAsync) Some(new DeviceIcnAsyncBundle(node)) else None
-  val sync = if(p(ZJParametersKey).cpuAsync) None else Some(new DeviceIcnBundle(node))
-  val reset = Input(AsyncReset())
-  def <>(that: CcnIcnBundle):Unit = {
-    this.async.foreach(_ <> that.async.get)
-    this.sync.foreach(_ <> that.sync.get)
-    this.reset := that.reset
-  }
-}
+  lazy val ddrIO: AxiBundle = IO(new AxiBundle(ddrDrv.params))
+  lazy val cfgIO: Seq[AxiBundle] = cfgDrv.map(drv => IO(new AxiBundle(drv.params)))
+  lazy val dmaIO: Seq[AxiBundle] = dmaDrv.map(drv => IO(Flipped(new AxiBundle(drv.params))))
+  lazy val ccnIO: Seq[SocketIcnSideBundle] = ccnDrv.map(drv => IO(new SocketIcnSideBundle(drv.node)(p)))
 
-class SocIcnBundle(cfgNode:Node, dmaNode:Node)(implicit p:Parameters) extends Bundle {
-  val cfg = new IcnAsyncBundle(cfgNode)
-  val dma = new IcnAsyncBundle(dmaNode)
-  val reset = Output(AsyncReset())
-  def <>(that: SocDevBundle):Unit = {
-    this.cfg <> that.cfg
-    this.dma <> that.dma
-    that.reset := this.reset
-  }
-}
-
-class SocDevBundle(cfgNode:Node, dmaNode:Node)(implicit p:Parameters) extends Bundle {
-  val cfg = new DeviceIcnAsyncBundle(cfgNode)
-  val dma = new DeviceIcnAsyncBundle(dmaNode)
-  val reset = Input(AsyncReset())
-  def <>(that: SocIcnBundle):Unit = {
-    this.cfg <> that.cfg
-    this.dma <> that.dma
-    this.reset := that.reset
+  def runIOAutomation():Unit = {
+    ddrIO <> ddrDrv
+    ddrIO.suggestName("m_ddr")
+    cfgIO.zip(cfgDrv).zipWithIndex.foreach({ case((a, b), i) =>
+      if(b.params.attr != "") a.suggestName(s"m_cfg_${b.params.attr}")
+      else a.suggestName(s"m_cfg_$i")
+      a <> b
+    })
+    dmaIO.zip(dmaDrv).zipWithIndex.foreach({ case((a, b), i) =>
+      if(b.params.attr != "") a.suggestName(s"s_dma_${b.params.attr}")
+      else a.suggestName(s"s_dma_$i")
+      a <> b
+    })
+    ccnIO.zip(ccnDrv).foreach({ case (a, b) =>
+      a.suggestName(s"ccn_0x${b.node.nodeId.toHexString}")
+      a <> b
+    })
   }
 }
