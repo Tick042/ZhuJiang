@@ -56,7 +56,7 @@ class ChiREntrys(implicit p: Parameters) extends ZJModule with HasCircularQueueP
  * Pointers Logic
  */
   when(io.axiAr.fire){
-    dEntrys(dHeadPtr.value).chiREntryInit(io.axiAr.bits)
+    dEntrys(dHeadPtr.value).ARMesInit(io.axiAr.bits)
     dHeadPtr := dHeadPtr + 1.U
   }
 
@@ -74,8 +74,7 @@ class ChiREntrys(implicit p: Parameters) extends ZJModule with HasCircularQueueP
 /* 
  * Receive CHI Resp Logic
  */
-  when(io.chiRsp.fire){
-    assert(io.chiRsp.bits.Opcode === RspOpcode.ReadReceipt)
+  when(io.chiRsp.fire & io.chiRsp.bits.Opcode === RspOpcode.ReadReceipt){
     assert(io.chiRsp.bits.TxnID === sendReqPtr)
     sendReqPtr := sendReqPtr + 1.U
   }
@@ -112,9 +111,10 @@ class ChiREntrys(implicit p: Parameters) extends ZJModule with HasCircularQueueP
   readDBBdl.setBdl(dEntrys(readDBPtr.set), readDBPtr)
   when(io.rdDB.fire){
     readDBPtr.PtrRdAdd(dEntrys(readDBPtr.set))
+  }
+  when(io.rdDB.fire & io.rdDB.bits.last){
     dTailPtr := dTailPtr + 1.U
   }
-
  
 /* 
  * IO Interface
