@@ -98,9 +98,12 @@ class ChiWEntrys(implicit p: Parameters) extends ZJModule with HasCircularQueueP
     dTailPtr := dTailPtr + 1.U
   }
   when(io.rdDB.fire){
-    dEntrys(sendDatPtr.set).haveRdData := Mux(dEntrys(sendDatPtr.set).double & sendDatPtr.poi === 1.U | !dEntrys(sendDatPtr.set).double, true.B, dEntrys(sendDatPtr.set).haveRdData)
     sendDatPtr.PtrWrAdd(dEntrys(sendDatPtr.set))
   }
+  when(io.rdDB.fire & (dEntrys(sendDatPtr.set).double & sendDatPtr.poi === 1.U | !dEntrys(sendDatPtr.set).double)){
+    dEntrys(sendDatPtr.set).haveRdData := true.B
+  }
+
   rdDBBdl.dataID := Mux(sendDatPtr.poi === 0.U, 0.U, 2.U)
   rdDBBdl.set    := Mux(sendDatPtr.poi === 0.U, dEntrys(sendDatPtr.set).dbSite1, dEntrys(sendDatPtr.set).dbSite2)
   rdDBBdl.tgtId  := dEntrys(sendDatPtr.set).tgtid

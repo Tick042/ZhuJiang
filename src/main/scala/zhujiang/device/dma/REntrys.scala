@@ -105,8 +105,13 @@ class ChiREntrys(implicit p: Parameters) extends ZJModule with HasCircularQueueP
   io.wrDB.valid     := Mux(dEntrys(dataTxnid).double, io.chiDat.valid, 
                             Mux(fromDCT(io.chiDat.bits.SrcID), Mux(dEntrys(dataTxnid).addr(5), io.chiDat.bits.DataID === 2.U && io.chiDat.valid, 
                               io.chiDat.bits.DataID === 0.U & io.chiDat.valid), io.chiDat.valid))
-  dEntrys(dataTxnid).haveWrDB1 := Mux(io.wrDB.valid && io.chiDat.bits.DataID === 0.U, true.B, dEntrys(dataTxnid).haveWrDB1)
-  dEntrys(dataTxnid).haveWrDB2 := Mux(io.wrDB.valid && io.chiDat.bits.DataID === 2.U, true.B, dEntrys(dataTxnid).haveWrDB2)
+
+  when(io.wrDB.valid & io.chiDat.bits.DataID === 0.U){
+    dEntrys(dataTxnid).haveWrDB1 := true.B
+  }
+  when(io.wrDB.valid & io.chiDat.bits.DataID === 2.U){
+    dEntrys(dataTxnid).haveWrDB2 := true.B
+  }
 
 /* 
  * Read DataBuffer Logic 
