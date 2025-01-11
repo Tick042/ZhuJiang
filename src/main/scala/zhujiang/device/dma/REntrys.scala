@@ -44,8 +44,8 @@ class ChiREntrys(implicit p: Parameters) extends ZJModule with HasCircularQueueP
   private val dHeadPtr = RegInit(CirQChiEntryPtr(f = false.B, v = 0.U))
   private val dTailPtr = RegInit(CirQChiEntryPtr(f = false.B, v = 0.U))
 
-  private val allocDBPtr = RegInit(0.U(log2Ceil(dmaParams.chiEntrySize).W))
-  private val sendReqPtr = RegInit(0.U(log2Ceil(dmaParams.chiEntrySize).W))
+  private val allocDBPtr = RegInit(CirQChiEntryPtr(f = false.B, v = 0.U))
+  private val sendReqPtr = RegInit(CirQChiEntryPtr(f = false.B, v = 0.U))
   private val readDBPtr  = RegInit(0.U.asTypeOf(new ChiDBPtr(dmaParams.chiEntrySize)))
   
   private val chiReqBdl  = WireInit(0.U.asTypeOf(new DmaReqFlit))
@@ -61,7 +61,7 @@ class ChiREntrys(implicit p: Parameters) extends ZJModule with HasCircularQueueP
   }
 
   when(io.respDB.valid){
-    dEntrys(allocDBPtr).chiRAllocDB(io.respDB.bits)
+    dEntrys(allocDBPtr.value).chiRAllocDB(io.respDB.bits)
     allocDBPtr := allocDBPtr + 1.U
   }
 
@@ -69,16 +69,16 @@ class ChiREntrys(implicit p: Parameters) extends ZJModule with HasCircularQueueP
  * Send CHI Req Logic
  */
   when(io.chiReq.fire){
-    dEntrys(sendReqPtr).haveSendReq := true.B
+    dEntrys(sendReqPtr.value).haveSendReq := true.B
   }
 
-  chiReqBdl.RReqInit(dEntrys(sendReqPtr), sendReqPtr)
+  chiReqBdl.RReqInit(dEntrys(sendReqPtr.value), sendReqPtr.value)
 
 /* 
  * Receive CHI Resp Logic
  */
   when(io.chiRsp.fire & io.chiRsp.bits.Opcode === RspOpcode.ReadReceipt){
-    assert(io.chiRsp.bits.TxnID === sendReqPtr)
+    assert(io.chiRsp.bits.TxnID === sendReqPtr.value)
     sendReqPtr := sendReqPtr + 1.U
   }
 
@@ -123,13 +123,14 @@ class ChiREntrys(implicit p: Parameters) extends ZJModule with HasCircularQueueP
  * IO Interface
  */
   io.axiAr.ready       := !isFull(dHeadPtr, dTailPtr)
-  io.reqDB.valid       := allocDBPtr =/= dHeadPtr.value
-  io.reqDB.bits        := dEntrys(allocDBPtr).double
-  io.chiReq.valid      := sendReqPtr =/= dHeadPtr.value && !dEntrys(sendReqPtr).haveSendReq && dEntrys(sendReqPtr).haveAllocDB
+  io.reqDB.valid       := allocDBPtr =/= dHeadPtr
+  io.reqDB.bits        := dEntrys(allocDBPtr.value).double
+  io.chiReq.valid      := sendReqPtr =/= dHeadPtr && !dEntrys(sendReqPtr.value).haveSendReq && (dEntrys(sendReqPtr.value).haveAllocDB | io.respDB.valid)
   io.chiReq.bits       := chiReqBdl
   io.chiRsp.ready      := true.B
   io.chiDat.ready      := true.B
-  io.rdDB.valid        := readDBPtr.set =/= dHeadPtr.value & (dEntrys(readDBPtr.set).haveWrDB1 & readDBPtr.poi === 0.U | dEntrys(readDBPtr.set).haveWrDB2 & readDBPtr.poi === 1.U)
+  io.rdDB.valid        := dTailPtr =/= dHeadPtr & (dEntrys(readDBPtr.set).haveWrDB1 & dEntrys(readDBPtr.set).haveWrDB2 & dEntrys(readDBPtr.set).double | 
+                          dEntrys(readDBPtr.set).haveWrDB1 & !dEntrys(readDBPtr.set).double)
   io.rdDB.bits         := readDBBdl
 
 /* 

@@ -49,8 +49,8 @@ class ChiWEntrys(implicit p: Parameters) extends ZJModule with HasCircularQueueP
   private val axiBBdl    = WireInit(0.U.asTypeOf(new BFlit(axiParams)))
   private val rdDBBdl    = WireInit(0.U.asTypeOf(new readWrDataBuffer(dmaParams.bufferSize)))
 
-  private val sendReqPtr = RegInit(0.U(log2Ceil(dmaParams.chiEntrySize).W))
-  private val reqDBPtr   = RegInit(0.U(log2Ceil(dmaParams.bufferSize).W))
+  private val sendReqPtr = RegInit(CirQChiEntryPtr(f = false.B, v = 0.U))
+  private val reqDBPtr   = RegInit(CirQChiEntryPtr(f = false.B, v = 0.U))
   private val sendDatPtr = RegInit(0.U.asTypeOf(new ChiDBPtr(dmaParams.chiEntrySize)))
   private val sendBPtr   = RegInit(0.U(log2Ceil(dmaParams.chiEntrySize).W))
 
@@ -59,10 +59,10 @@ class ChiWEntrys(implicit p: Parameters) extends ZJModule with HasCircularQueueP
     dHeadPtr := dHeadPtr + 1.U
   }
   when(io.respDB.valid){
-    dEntrys(reqDBPtr).haveAllocDB := true.B
-    dEntrys(reqDBPtr).dbSite1     := io.respDB.bits.buf(0)
-    dEntrys(reqDBPtr).dbSite2     := io.respDB.bits.buf(1)
-    reqDBPtr                      := reqDBPtr + 1.U
+    dEntrys(reqDBPtr.value).haveAllocDB := true.B
+    dEntrys(reqDBPtr.value).dbSite1     := io.respDB.bits.buf(0)
+    dEntrys(reqDBPtr.value).dbSite2     := io.respDB.bits.buf(1)
+    reqDBPtr                            := reqDBPtr + 1.U
   }
 
   io.wrDB.bits.data := io.axiW.bits.data
@@ -72,14 +72,14 @@ class ChiWEntrys(implicit p: Parameters) extends ZJModule with HasCircularQueueP
   when(io.axiW.fire){
     uWPtr.PtrWrAdd(dEntrys(uWPtr.set))
   }
-  chiReqBdl.WReqInit(dEntrys(sendReqPtr), sendReqPtr)
+  chiReqBdl.WReqInit(dEntrys(sendReqPtr.value), sendReqPtr.value)
   when(io.chiReq.fire){
-    dEntrys(sendReqPtr).haveSendReq := true.B
+    dEntrys(sendReqPtr.value).haveSendReq := true.B
   }
-  when(io.chiRxRsp.fire && io.chiRxRsp.bits.TxnID === sendReqPtr && (io.chiRxRsp.bits.Opcode === RspOpcode.DBIDResp || io.chiRxRsp.bits.Opcode === RspOpcode.CompDBIDResp)){
+  when(io.chiRxRsp.fire && io.chiRxRsp.bits.TxnID === sendReqPtr.value && (io.chiRxRsp.bits.Opcode === RspOpcode.DBIDResp || io.chiRxRsp.bits.Opcode === RspOpcode.CompDBIDResp)){
     sendReqPtr := sendReqPtr + 1.U
-    dEntrys(sendReqPtr).dbid := io.chiRxRsp.bits.DBID
-    dEntrys(sendReqPtr).tgtid := io.chiRxRsp.bits.SrcID
+    dEntrys(sendReqPtr.value).dbid := io.chiRxRsp.bits.DBID
+    dEntrys(sendReqPtr.value).tgtid := io.chiRxRsp.bits.SrcID
   }
   when(io.chiRxRsp.fire & (io.chiRxRsp.bits.Opcode === RspOpcode.Comp | io.chiRxRsp.bits.Opcode === RspOpcode.CompDBIDResp)){
     dEntrys(io.chiRxRsp.bits.TxnID(log2Ceil(dmaParams.chiEntrySize) - 1, 0)).haveRcvComp := true.B
@@ -115,9 +115,9 @@ class ChiWEntrys(implicit p: Parameters) extends ZJModule with HasCircularQueueP
  */
   io.axiAw.ready   := !isFull(dHeadPtr, dTailPtr)
   io.axiW.ready    := dEntrys(uWPtr.set).haveAllocDB & io.wrDB.ready
-  io.reqDB.bits    := dEntrys(reqDBPtr).double
-  io.reqDB.valid   := reqDBPtr =/= dHeadPtr.value 
-  io.chiReq.valid  := sendReqPtr =/= dHeadPtr.value & !dEntrys(sendReqPtr).haveSendReq
+  io.reqDB.bits    := dEntrys(reqDBPtr.value).double
+  io.reqDB.valid   := reqDBPtr =/= dHeadPtr 
+  io.chiReq.valid  := sendReqPtr =/= dHeadPtr & !dEntrys(sendReqPtr.value).haveSendReq
   io.chiReq.bits   := chiReqBdl
   io.chiTxRsp.valid  := dEntrys(dTailPtr.value).haveRcvComp & dEntrys(dTailPtr.value).haveRdData & dTailPtr =/= dHeadPtr
   io.chiTxRsp.bits   := chiRspBdl
