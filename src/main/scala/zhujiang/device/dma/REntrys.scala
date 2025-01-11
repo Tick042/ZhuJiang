@@ -68,7 +68,10 @@ class ChiREntrys(implicit p: Parameters) extends ZJModule with HasCircularQueueP
 /* 
  * Send CHI Req Logic
  */
-  dEntrys(sendReqPtr).haveSendReq := Mux(io.chiReq.fire, true.B, dEntrys(sendReqPtr).haveSendReq)
+  when(io.chiReq.fire){
+    dEntrys(sendReqPtr).haveSendReq := true.B
+  }
+
   chiReqBdl.RReqInit(dEntrys(sendReqPtr), sendReqPtr)
 
 /* 
