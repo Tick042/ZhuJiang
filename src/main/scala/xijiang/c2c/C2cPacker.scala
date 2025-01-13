@@ -13,29 +13,28 @@ class C2cIcnBundle(implicit p:Parameters) extends ZJBundle {
 }
 
 class C2cTxDispatcher(implicit p:Parameters) extends ZJModule {
-  private val (nrReqSlots, nrReqDeq) = C2cUtils.getSlotsAndDeq(reqFlitBits)
-  private val (nrRspSlots, nrRspDeq) = C2cUtils.getSlotsAndDeq(respFlitBits)
-  private val (nrDatSlots, nrDatDeq) = C2cUtils.getSlotsAndDeq(dataFlitBits)
-  private val (nrSnpSlots, nrSnpDeq) = C2cUtils.getSlotsAndDeq(snoopFlitBits)
+  private val chnInfoSeq = Seq(
+    C2cUtils.getSlotsAndDeq(reqFlitBits),
+    C2cUtils.getSlotsAndDeq(respFlitBits),
+    C2cUtils.getSlotsAndDeq(dataFlitBits),
+    C2cUtils.getSlotsAndDeq(snoopFlitBits),
+  )
 
   val io = IO(new Bundle {
     val rx = new Bundle {
-      val reqSlots = Flipped(Vec(nrReqDeq, Decoupled(new C2cSlot)))
-      val rspSlots = Flipped(Vec(nrRspDeq, Decoupled(new C2cSlot)))
-      val snpSlots = Flipped(Vec(nrSnpDeq, Decoupled(new C2cSlot)))
-      val datSlots = Flipped(Vec(nrDatDeq, Decoupled(new C2cSlot)))
-      val reqGrant = Flipped(Decoupled(UInt(3.W)))
-      val rspGrant = Flipped(Decoupled(UInt(3.W)))
-      val datGrant = Flipped(Decoupled(UInt(3.W)))
-      val snpGrant = Flipped(Decoupled(UInt(3.W)))
+      val slots = MixedVec(chnInfoSeq.map(info => Flipped(Vec(info._2, Decoupled(new C2cSlot)))))
+      val grants = Vec(C2cUtils.nrChn, Flipped(Decoupled(UInt(C2cUtils.grantDataBits.W))))
     }
     val tx = Decoupled(new C2cPayload)
   })
-  require(nrReqSlots == 2)
-  require(nrRspSlots == 1)
-  require(nrDatSlots == 5)
-  require(nrSnpSlots == 2)
-
+  private val reqSlots = io.rx.slots(C2cUtils.reqId)
+  private val rspSlots = io.rx.slots(C2cUtils.rspId)
+  private val datSlots = io.rx.slots(C2cUtils.datId)
+  private val snpSlots = io.rx.slots(C2cUtils.snpId)
+  require(chnInfoSeq(C2cUtils.reqId)._1 == 2)
+  require(chnInfoSeq(C2cUtils.rspId)._1 == 1)
+  require(chnInfoSeq(C2cUtils.datId)._1 == 5)
+  require(chnInfoSeq(C2cUtils.snpId)._1 == 2)
 
   private val flitAllSlotsType = Vec(C2cUtils.nrSlotsPerFrame, Valid(new C2cSlot))
 
@@ -43,7 +42,7 @@ class C2cTxDispatcher(implicit p:Parameters) extends ZJModule {
   private val payloadArb = Module(new ResetRRArbiter(flitAllSlotsType, 2))
 
   private val datPayload = Wire(Decoupled(flitAllSlotsType))
-  datPayload.bits.zip(io.rx.datSlots).foreach({ case(a, b) =>
+  datPayload.bits.zip(datSlots).foreach({ case(a, b) =>
     a.valid := b.valid
     a.bits := b.bits
     b.ready := datPayload.ready
@@ -52,33 +51,31 @@ class C2cTxDispatcher(implicit p:Parameters) extends ZJModule {
 
   private val combPayload = Wire(Decoupled(flitAllSlotsType))
   private val combArb = Module(new ResetRRArbiter(Bool(), 2))
-  combArb.io.in.head.valid := io.rx.reqSlots.head.valid
-  combArb.io.in.last.valid := io.rx.snpSlots.head.valid
+  combArb.io.in.head.valid := reqSlots.head.valid
+  combArb.io.in.last.valid := snpSlots.head.valid
   combArb.io.out.ready := combPayload.ready
   combArb.io.in.foreach(_.bits := DontCare)
-  io.rx.reqSlots.foreach(_.ready := combArb.io.in.head.ready)
-  io.rx.snpSlots.foreach(_.ready := combArb.io.in.last.ready)
+  reqSlots.foreach(_.ready := combArb.io.in.head.ready)
+  snpSlots.foreach(_.ready := combArb.io.in.last.ready)
 
-  for(i <- 0 until nrReqSlots) {
-    combPayload.bits(i).valid := Mux(combArb.io.chosen === 0.U, io.rx.reqSlots(i).valid, io.rx.snpSlots(i).valid)
-    combPayload.bits(i).bits := Mux(combArb.io.chosen === 0.U, io.rx.reqSlots(i).bits, io.rx.snpSlots(i).bits)
+  for(i <- reqSlots.indices) {
+    combPayload.bits(i).valid := Mux(combArb.io.chosen === 0.U, reqSlots(i).valid, snpSlots(i).valid)
+    combPayload.bits(i).bits := Mux(combArb.io.chosen === 0.U, reqSlots(i).bits, snpSlots(i).bits)
   }
-  combPayload.bits.last.valid := io.rx.rspSlots.head.valid
-  combPayload.bits.last.bits := io.rx.rspSlots.head.bits
-  io.rx.rspSlots.head.ready := combPayload.ready
+  combPayload.bits.last.valid := rspSlots.head.valid
+  combPayload.bits.last.bits := rspSlots.head.bits
+  rspSlots.head.ready := combPayload.ready
 
   combPayload.valid := combPayload.bits.map(_.valid).reduce(_ | _)
 
   payloadArb.io.in.head <> datPayload
   payloadArb.io.in.last <> combPayload
 
-  private val grantSeq = Seq(io.rx.reqGrant, io.rx.rspGrant, io.rx.datGrant, io.rx.snpGrant)
-  private val txGrantSeq = Seq(oPipe.io.enq.bits.reqGrants, oPipe.io.enq.bits.rspGrants, oPipe.io.enq.bits.datGrants, oPipe.io.enq.bits.snpGrants)
-  private val grantReq = Cat(grantSeq.map(_.valid)).orR
-  oPipe.io.enq.valid := grantReq || payloadArb.io.out.valid
+  oPipe.io.enq.valid := Cat(io.rx.grants.map(_.valid)).orR || payloadArb.io.out.valid
   oPipe.io.enq.bits.slots := payloadArb.io.out.bits
   payloadArb.io.out.ready := oPipe.io.enq.ready
-  txGrantSeq.zip(grantSeq).foreach({ case(a, b) =>
+
+  oPipe.io.enq.bits.grants.zip(io.rx.grants).foreach({ case(a, b) =>
     a.valid := b.valid
     a.bits := b.bits
     b.ready := oPipe.io.enq.ready
@@ -106,6 +103,8 @@ class C2cPacker(implicit p:Parameters) extends ZJModule {
       val tx = new C2cIcnBundle
       val rx = Flipped(new C2cIcnBundle)
     }
+    val userTx = Input(UInt(C2cUtils.slotDataBits.W))
+    val userRx = Output(Valid(UInt(C2cUtils.slotDataBits.W)))
     val c2c = new C2cBundle
   })
   private val dispatcher = Module(new C2cTxDispatcher)
@@ -119,57 +118,65 @@ class C2cPacker(implicit p:Parameters) extends ZJModule {
   private val rxdat = Module(new RxQueue(UInt(dataFlitBits.W), C2cUtils.datId, zjParams.c2cParams.datRxSize))
   private val rxsnp = Module(new RxQueue(UInt(snoopFlitBits.W), C2cUtils.snpId, zjParams.c2cParams.snpRxSize))
 
+  private val userRxBits = Reg(UInt(C2cUtils.slotDataBits.W))
+  private val userRxFired = RegInit(false.B)
+  private val initTxFrame = WireInit(0.U.asTypeOf(new C2cPayload))
+  private val userTxFired = RegInit(false.B)
+  private val linkInitialized = RegInit(false.B)
+  private val userTxValid = !linkInitialized
+  private val rxPayload  = Wire(Valid(new C2cPayload))
+  private val rxPipe = Pipe(rxPayload)
+  private val receivingInitFrame = io.c2c.rx.valid && Cat(rxPipe.bits.slots.map(_.valid) ++ rxPipe.bits.grants.map(_.valid)) === 0.U
+  rxPayload.valid := io.c2c.rx.valid
+  rxPayload.bits := io.c2c.rx.bits.asTypeOf(new C2cPayload)
+
+  //init link
+  initTxFrame.slots.head.bits := io.userTx.asTypeOf(initTxFrame.slots.head.bits)
+  userTxFired := Mux(userTxFired, userTxFired, io.c2c.tx.fire)
+  userRxFired := Mux(userRxFired, userRxFired, receivingInitFrame)
+  userRxBits := Mux(receivingInitFrame, rxPipe.bits.slots.head.bits.asUInt, userRxBits)
+  linkInitialized := userRxFired && userTxFired
+  io.userRx.valid := linkInitialized
+  io.userRx.bits := userRxBits
+
   //tx connections
   txreq.io.enq <> io.icn.rx.req
   txrsp.io.enq <> io.icn.rx.rsp
   txdat.io.enq <> io.icn.rx.dat
   txsnp.io.enq <> io.icn.rx.snp
 
-  dispatcher.io.rx.reqSlots <> txreq.io.deq
-  dispatcher.io.rx.rspSlots <> txrsp.io.deq
-  dispatcher.io.rx.datSlots <> txdat.io.deq
-  dispatcher.io.rx.snpSlots <> txsnp.io.deq
+  private val txqSeq = Seq(txreq, txrsp, txdat, txsnp)
+  for(txq <- txqSeq) {
+    dispatcher.io.rx.slots(txq.chnId) <> txq.io.deq
+    txq.io.grant.valid := rxPipe.valid && rxPipe.bits.grants(txq.chnId).valid
+    txq.io.grant.bits := rxPipe.bits.grants(txq.chnId).bits
+  }
 
-  io.c2c.tx.valid := dispatcher.io.tx.valid
-  io.c2c.tx.bits := dispatcher.io.tx.bits.asUInt
-  dispatcher.io.tx.ready := io.c2c.tx.ready
+  io.c2c.tx.valid := userTxValid || dispatcher.io.tx.valid
+  io.c2c.tx.bits := Mux(userTxValid, initTxFrame.asUInt, dispatcher.io.tx.bits.asUInt)
+  dispatcher.io.tx.ready := linkInitialized && io.c2c.tx.ready
 
   //rx connections
-  private val rxPayload  = Wire(Valid(new C2cPayload))
-  rxPayload.valid := io.c2c.rx.valid
-  rxPayload.bits := io.c2c.rx.bits.asTypeOf(new C2cPayload)
-  private val rxPipe = Pipe(rxPayload)
-
-  rxreq.io.enq := rxPipe
-  rxrsp.io.enq := rxPipe
-  rxdat.io.enq := rxPipe
-  rxsnp.io.enq := rxPipe
+  private val rxqSeq = Seq(rxreq, rxrsp, rxdat, rxsnp)
+  for(rxq <- rxqSeq) {
+    rxq.io.enq <> rxPipe
+    dispatcher.io.rx.grants(rxq.chnId) <> rxq.io.grant
+  }
 
   io.icn.tx.req <> rxreq.io.deq
   io.icn.tx.rsp <> rxrsp.io.deq
   io.icn.tx.dat <> rxdat.io.deq
   io.icn.tx.snp <> rxsnp.io.deq
-
-  //grant connections
-  dispatcher.io.rx.reqGrant <> rxreq.io.grant
-  dispatcher.io.rx.rspGrant <> rxrsp.io.grant
-  dispatcher.io.rx.datGrant <> rxdat.io.grant
-  dispatcher.io.rx.snpGrant <> rxsnp.io.grant
-
-  txreq.io.grant.valid := rxPipe.valid && rxPipe.bits.reqGrants.valid
-  txreq.io.grant.bits := rxPipe.bits.reqGrants.bits
-  txrsp.io.grant.valid := rxPipe.valid && rxPipe.bits.rspGrants.valid
-  txrsp.io.grant.bits := rxPipe.bits.rspGrants.bits
-  txdat.io.grant.valid := rxPipe.valid && rxPipe.bits.datGrants.valid
-  txdat.io.grant.bits := rxPipe.bits.datGrants.bits
-  txsnp.io.grant.valid := rxPipe.valid && rxPipe.bits.snpGrants.valid
-  txsnp.io.grant.bits := rxPipe.bits.snpGrants.bits
 }
 
 class C2cLoopBack(implicit p:Parameters) extends ZJModule {
   val io = IO(new Bundle {
     val enq = Flipped(new C2cIcnBundle)
     val deq = new C2cIcnBundle
+    val p0UserIn = Input(UInt(C2cUtils.slotDataBits.W))
+    val p0UserOut = Output(Valid(UInt(C2cUtils.slotDataBits.W)))
+    val p1UserIn = Input(UInt(C2cUtils.slotDataBits.W))
+    val p1UserOut = Output(Valid(UInt(C2cUtils.slotDataBits.W)))
   })
   private def addCounter[T <: Data](port:DecoupledIO[T], name:String):Unit = {
     val cnt = RegInit(0.U(64.W))
@@ -192,6 +199,10 @@ class C2cLoopBack(implicit p:Parameters) extends ZJModule {
   private val link0B = Reg(Vec(linkLatency, UInt(256.W)))
   private val link1V = RegInit(VecInit(Seq.fill(linkLatency)(false.B)))
   private val link1B = Reg(Vec(linkLatency, UInt(256.W)))
+  p0.io.userTx := io.p0UserIn
+  io.p0UserOut := p0.io.userRx
+  p1.io.userTx := io.p1UserIn
+  io.p1UserOut := p1.io.userRx
 
   private val link0VSeq = link0V :+ link0.valid
   private val link0BSeq = link0B :+ link0.bits

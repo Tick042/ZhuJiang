@@ -164,8 +164,6 @@ class Zhujiang(isTop:Boolean = false)(implicit p: Parameters) extends ZJModule w
   val dmaDrv = dmaDevSeq.map(_.axi)
   val ccnDrv = ccnSocketSeq.map(_.io.socket)
   runIOAutomation()
-  ccnSocketSeq.foreach(_.io.chip.foreach(_.local := io.chip))
-
   io.assertionOut := assertionNode.assertion
   io.onReset := resetDev.io.onReset
   localRing.io_chip := io.chip

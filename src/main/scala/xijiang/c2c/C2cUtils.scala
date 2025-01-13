@@ -15,6 +15,7 @@ object C2cUtils {
   val rspId = 1
   val datId = 2
   val snpId = 3
+  val nrChn = 4
   val payloadBits = 256
   val grantBits = 4
   val nrSlotsPerFrame = 3
@@ -48,13 +49,10 @@ class C2cSlot extends Bundle {
 
 class C2cPayload extends Bundle {
   val slots = Vec(C2cUtils.nrSlotsPerFrame, Valid(new C2cSlot))
-  val reqGrants = Valid(UInt(C2cUtils.grantDataBits.W))
-  val rspGrants = Valid(UInt(C2cUtils.grantDataBits.W))
-  val datGrants = Valid(UInt(C2cUtils.grantDataBits.W))
-  val snpGrants = Valid(UInt(C2cUtils.grantDataBits.W))
+  val grants = Vec(C2cUtils.nrChn, Valid(UInt(C2cUtils.grantDataBits.W)))
 }
 
-class TxQueue[T <: Data](gen: T, chnId:Int) extends Module with HasCircularQueuePtrHelper {
+class TxQueue[T <: Data](gen: T, val chnId:Int) extends Module with HasCircularQueuePtrHelper {
   private val (nrSlots, nrDeq) = C2cUtils.getSlotsAndDeq(gen.getWidth)
   private class SlotPtr extends CircularQueuePtr[SlotPtr](nrSlots)
   private object SlotPtr {
@@ -112,7 +110,7 @@ class TxQueue[T <: Data](gen: T, chnId:Int) extends Module with HasCircularQueue
   }
 }
 
-class RxQueue[T <: Data](gen: T, chnId:Int, depth:Int) extends Module {
+class RxQueue[T <: Data](gen: T, val chnId:Int, depth:Int) extends Module {
   private val (nrSlots, _) = C2cUtils.getSlotsAndDeq(gen.getWidth)
   require(depth <= C2cUtils.nrMaxToken)
   private val suffix = C2cUtils.chnIdToStr(chnId)
