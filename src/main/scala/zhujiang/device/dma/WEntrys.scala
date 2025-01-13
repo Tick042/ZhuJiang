@@ -27,14 +27,14 @@ class ChiWEntrys(implicit p: Parameters) extends ZJModule with HasCircularQueueP
   }
 
   val io = IO(new Bundle {
-    val alloc    = Flipped(Decoupled(new AllocWrChiReq))
     val reqDB    = Decoupled(Bool())
     val respDB   = Input(Valid(new ChiDataBufferCtrlEntry(dmaParams.bufferSize)))
-    val uW       = Flipped(Decoupled(new WFlit(axiParams))) 
-    val uB       = Decoupled(new BFlit(axiParams))
-    val dTxReq   = Decoupled(new ReqFlit)
-    val dRxRsp   = Flipped(Decoupled(new RespFlit))
-    val dTxRsp   = Decoupled(new RespFlit)
+    val axiAw    = Flipped(Decoupled(new AWFlit(axiParams)))
+    val axiW     = Flipped(Decoupled(new WFlit(axiParams))) 
+    val axiB     = Decoupled(new BFlit(axiParams))
+    val chiReq   = Decoupled(new ReqFlit)
+    val chiRxRsp = Flipped(Decoupled(new RespFlit))
+    val chiTxRsp = Decoupled(new RespFlit)
     val rdDB     = Decoupled(new readWrDataBuffer(dmaParams.bufferSize)) // Read DataBuffer
     val wrDB     = Decoupled(new writeWrDataBuffer(dmaParams.bufferSize))
   })
@@ -49,79 +49,85 @@ class ChiWEntrys(implicit p: Parameters) extends ZJModule with HasCircularQueueP
   private val axiBBdl    = WireInit(0.U.asTypeOf(new BFlit(axiParams)))
   private val rdDBBdl    = WireInit(0.U.asTypeOf(new readWrDataBuffer(dmaParams.bufferSize)))
 
-  private val sendReqPtr = RegInit(0.U(log2Ceil(dmaParams.chiEntrySize).W))
-  private val reqDBPtr   = RegInit(0.U(log2Ceil(dmaParams.bufferSize).W))
-  private val sendAckPtr = RegInit(0.U(log2Ceil(dmaParams.chiEntrySize).W))
+  private val sendReqPtr = RegInit(CirQChiEntryPtr(f = false.B, v = 0.U))
+  private val reqDBPtr   = RegInit(CirQChiEntryPtr(f = false.B, v = 0.U))
   private val sendDatPtr = RegInit(0.U.asTypeOf(new ChiDBPtr(dmaParams.chiEntrySize)))
   private val sendBPtr   = RegInit(0.U(log2Ceil(dmaParams.chiEntrySize).W))
 
-  when(io.alloc.fire){
-    dEntrys(dHeadPtr.value).chiWEntryInit(io.alloc.bits)
+  when(io.axiAw.fire){
+    dEntrys(dHeadPtr.value).AWMesInit(io.axiAw.bits)
     dHeadPtr := dHeadPtr + 1.U
   }
   when(io.respDB.valid){
-    dEntrys(reqDBPtr).haveAllocDB := true.B
-    dEntrys(reqDBPtr).dbSite1     := io.respDB.bits.buf(0)
-    dEntrys(reqDBPtr).dbSite2     := io.respDB.bits.buf(1)
-    reqDBPtr                      := reqDBPtr + 1.U
+    dEntrys(reqDBPtr.value).haveAllocDB := true.B
+    dEntrys(reqDBPtr.value).dbSite1     := io.respDB.bits.buf(0)
+    dEntrys(reqDBPtr.value).dbSite2     := io.respDB.bits.buf(1)
+    reqDBPtr                            := reqDBPtr + 1.U
   }
 
-  io.wrDB.bits.data := io.uW.bits.data
-  io.wrDB.bits.mask := io.uW.bits.strb
+  io.wrDB.bits.data := io.axiW.bits.data
+  io.wrDB.bits.mask := io.axiW.bits.strb
   io.wrDB.bits.set  := Mux(uWPtr.poi === 0.U, dEntrys(uWPtr.set).dbSite1, dEntrys(uWPtr.set).dbSite2)
   
-  when(io.uW.fire){
-    dEntrys(uWPtr.set).wPtrAdd(io.uW.bits, uWPtr)
+  when(io.axiW.fire){
+    uWPtr.PtrWrAdd(dEntrys(uWPtr.set))
   }
-  chiReqBdl.WReqInit(dEntrys(sendReqPtr), sendReqPtr)
-  when(io.dTxReq.fire){
-    dEntrys(sendReqPtr).haveSendReq := true.B
+  chiReqBdl.WReqInit(dEntrys(sendReqPtr.value), sendReqPtr.value)
+  when(io.chiReq.fire){
+    dEntrys(sendReqPtr.value).haveSendReq := true.B
   }
-  when(io.dRxRsp.fire && io.dRxRsp.bits.TxnID === sendReqPtr && (io.dRxRsp.bits.Opcode === RspOpcode.DBIDResp || io.dRxRsp.bits.Opcode === RspOpcode.CompDBIDResp)){
+  when(io.chiRxRsp.fire && io.chiRxRsp.bits.TxnID === sendReqPtr.value && (io.chiRxRsp.bits.Opcode === RspOpcode.DBIDResp || io.chiRxRsp.bits.Opcode === RspOpcode.CompDBIDResp)){
     sendReqPtr := sendReqPtr + 1.U
-    dEntrys(sendReqPtr).dbid := io.dRxRsp.bits.DBID
-    dEntrys(sendReqPtr).tgtid := io.dRxRsp.bits.SrcID
+    dEntrys(sendReqPtr.value).dbid := io.chiRxRsp.bits.DBID
+    dEntrys(sendReqPtr.value).tgtid := io.chiRxRsp.bits.SrcID
   }
-  when(io.dRxRsp.fire & (io.dRxRsp.bits.Opcode === RspOpcode.Comp | io.dRxRsp.bits.Opcode === RspOpcode.CompDBIDResp)){
-    dEntrys(io.dRxRsp.bits.TxnID).haveRcvComp := true.B
+  when(io.chiRxRsp.fire & (io.chiRxRsp.bits.Opcode === RspOpcode.Comp | io.chiRxRsp.bits.Opcode === RspOpcode.CompDBIDResp)){
+    dEntrys(io.chiRxRsp.bits.TxnID(log2Ceil(dmaParams.chiEntrySize) - 1, 0)).haveRcvComp := true.B
+  }
+  when(io.chiRxRsp.fire & (io.chiRxRsp.bits.Opcode === RspOpcode.DBIDResp | io.chiRxRsp.bits.Opcode === RspOpcode.CompDBIDResp)){
+    dEntrys(io.chiRxRsp.bits.TxnID(log2Ceil(dmaParams.chiEntrySize) - 1, 0)).haveRcvDBID := true.B
   }
 
   chiRspBdl       := 0.U.asTypeOf(chiRspBdl)
   chiRspBdl.SrcID := 1.U
-  chiRspBdl.TxnID := dEntrys(sendAckPtr).dbid
+  chiRspBdl.TxnID := dEntrys(dTailPtr.value).dbid
   chiRspBdl.Opcode := RspOpcode.CompAck
-  chiRspBdl.TgtID  := dEntrys(sendAckPtr).tgtid
+  chiRspBdl.TgtID  := dEntrys(dTailPtr.value).tgtid
 
-  when(io.dTxRsp.bits.Opcode === RspOpcode.CompAck && io.dTxRsp.fire){
-    sendAckPtr := sendAckPtr + 1.U
+  when(io.chiTxRsp.bits.Opcode === RspOpcode.CompAck && io.chiTxRsp.fire){
+    dTailPtr := dTailPtr + 1.U
   }
   when(io.rdDB.fire){
     sendDatPtr.PtrWrAdd(dEntrys(sendDatPtr.set))
   }
+  when(io.rdDB.fire & (dEntrys(sendDatPtr.set).double & sendDatPtr.poi === 1.U | !dEntrys(sendDatPtr.set).double)){
+    dEntrys(sendDatPtr.set).haveRdData := true.B
+  }
+
   rdDBBdl.dataID := Mux(sendDatPtr.poi === 0.U, 0.U, 2.U)
   rdDBBdl.set    := Mux(sendDatPtr.poi === 0.U, dEntrys(sendDatPtr.set).dbSite1, dEntrys(sendDatPtr.set).dbSite2)
   rdDBBdl.tgtId  := dEntrys(sendDatPtr.set).tgtid
   rdDBBdl.txnID  := dEntrys(sendDatPtr.set).dbid
 
-  sendBPtr   := Mux(!dEntrys(sendBPtr).last & sendBPtr < uWPtr.set | dEntrys(sendBPtr).last & io.uB.fire, sendBPtr + 1.U, sendBPtr)
+  sendBPtr   := Mux(sendBPtr =/= uWPtr.set & io.axiB.fire, sendBPtr + 1.U, sendBPtr)
   axiBBdl    := 0.U.asTypeOf(axiBBdl)
   axiBBdl.id := dEntrys(sendBPtr).awId
 
 /* 
  * IO Interface Connection
  */
-  io.uW.ready      := dEntrys(uWPtr.set).haveAllocDB & io.wrDB.ready
-  io.alloc.ready   := !isFull(dHeadPtr, dTailPtr)
-  io.reqDB.valid   := reqDBPtr =/= dHeadPtr.value
-  io.reqDB.bits    := dEntrys(reqDBPtr).double
-  io.dTxReq.valid  := sendReqPtr =/= dHeadPtr.value & !dEntrys(sendReqPtr).haveSendReq
-  io.dTxReq.bits   := chiReqBdl
-  io.dTxRsp.valid  := dEntrys(sendAckPtr).haveRcvComp
-  io.dTxRsp.bits   := chiRspBdl
-  io.dRxRsp.ready  := true.B
-  io.wrDB.valid    := io.uW.valid
-  io.rdDB.valid    := sendDatPtr.set < uWPtr.set
-  io.rdDB.bits     := rdDBBdl
-  io.uB.valid      := dEntrys(sendBPtr).last & sendBPtr < uWPtr.set
-  io.uB.bits       := axiBBdl
+  io.axiAw.ready   := !isFull(dHeadPtr, dTailPtr)
+  io.axiW.ready    := dEntrys(uWPtr.set).haveAllocDB & io.wrDB.ready
+  io.reqDB.bits    := dEntrys(reqDBPtr.value).double
+  io.reqDB.valid   := reqDBPtr =/= dHeadPtr 
+  io.chiReq.valid  := sendReqPtr =/= dHeadPtr & !dEntrys(sendReqPtr.value).haveSendReq
+  io.chiReq.bits   := chiReqBdl
+  io.chiTxRsp.valid  := dEntrys(dTailPtr.value).haveRcvComp & dEntrys(dTailPtr.value).haveRdData & dTailPtr =/= dHeadPtr
+  io.chiTxRsp.bits   := chiRspBdl
+  io.chiRxRsp.ready  := true.B
+  io.wrDB.valid      := io.axiW.valid
+  io.rdDB.valid      := sendDatPtr.set =/= uWPtr.set & dEntrys(sendDatPtr.set).haveRcvDBID
+  io.rdDB.bits       := rdDBBdl
+  io.axiB.valid      := sendBPtr =/= uWPtr.set
+  io.axiB.bits       := axiBBdl
 }

@@ -9,6 +9,7 @@ import zhujiang.{ZJBundle, ZJModule}
 import zhujiang.chi.DataFlit
 import xs.utils.sram.DualPortSramTemplate
 import zhujiang.chi.ReqOpcode
+import zhujiang.chi.DatOpcode
 
 class ChiDataBufferCtrlEntry(bufferSize: Int)(implicit p: Parameters) extends ZJBundle {
   val buf = Vec(512 / dw, UInt(log2Ceil(bufferSize).W))
@@ -174,15 +175,16 @@ class ChiDataBufferWrRam(bufferSize: Int)(implicit p: Parameters) extends ZJModu
 
   private val maskRam = RegInit(0.U.asTypeOf(Vec(zjParams.dmaParams.bufferSize, UInt(bew.W))))
 
-  when(io.writeDataReq.fire){
-    maskRam(io.writeDataReq.bits.set) := io.writeDataReq.bits.mask | maskRam(io.writeDataReq.bits.set)
-  }
 
   private val wrRamQ            = Module(new Queue(new writeWrDataBuffer(bufferSize), entries = 2, flow = false, pipe = false))
   private val readRamState1Pipe = Module(new Queue(new readWrDataBuffer(bufferSize), entries = 1, pipe = true))
   private val readRamStage2Pipe = Module(new Queue(new DataFlit, entries = 1, pipe = true))
   private val wDataVec          = Wire(Vec(bew, UInt(8.W)))
   private val releaseSet        = Reg(UInt(log2Ceil(zjParams.dmaParams.bufferSize).W))
+
+  when(wrRamQ.io.deq.fire){
+    maskRam(wrRamQ.io.deq.bits.set) := wrRamQ.io.deq.bits.mask | maskRam(wrRamQ.io.deq.bits.set)
+  }
 
   wrRamQ.io.deq.ready  := dataRam.io.wreq.ready
   wrRamQ.io.enq <> io.writeDataReq
@@ -207,7 +209,7 @@ class ChiDataBufferWrRam(bufferSize: Int)(implicit p: Parameters) extends ZJModu
   readRamStage2Pipe.io.enq.bits.DataID := readRamState1Pipe.io.deq.bits.dataID
   readRamStage2Pipe.io.enq.bits.TxnID  := readRamState1Pipe.io.deq.bits.txnID
   readRamStage2Pipe.io.enq.bits.BE     := maskRam(readRamState1Pipe.io.deq.bits.set)
-  readRamStage2Pipe.io.enq.bits.Opcode := Mux(maskRam(readRamState1Pipe.io.deq.bits.set).andR, ReqOpcode.WriteUniqueFull, ReqOpcode.WriteUniquePtl)
+  readRamStage2Pipe.io.enq.bits.Opcode := DatOpcode.NonCopyBackWriteData
   readRamStage2Pipe.io.enq.bits.Data   := dataRam.io.rresp.bits.asTypeOf(UInt(dw.W))
   readRamStage2Pipe.io.enq.bits.SrcID  := 1.U
   readRamStage2Pipe.io.enq.bits.TgtID  := readRamState1Pipe.io.deq.bits.tgtId

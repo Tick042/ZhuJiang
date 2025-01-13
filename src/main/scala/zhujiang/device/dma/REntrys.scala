@@ -44,8 +44,8 @@ class ChiREntrys(implicit p: Parameters) extends ZJModule with HasCircularQueueP
   private val dHeadPtr = RegInit(CirQChiEntryPtr(f = false.B, v = 0.U))
   private val dTailPtr = RegInit(CirQChiEntryPtr(f = false.B, v = 0.U))
 
-  private val allocDBPtr = RegInit(0.U(log2Ceil(dmaParams.chiEntrySize).W))
-  private val sendReqPtr = RegInit(0.U(log2Ceil(dmaParams.chiEntrySize).W))
+  private val allocDBPtr = RegInit(CirQChiEntryPtr(f = false.B, v = 0.U))
+  private val sendReqPtr = RegInit(CirQChiEntryPtr(f = false.B, v = 0.U))
   private val readDBPtr  = RegInit(0.U.asTypeOf(new ChiDBPtr(dmaParams.chiEntrySize)))
   
   private val chiReqBdl  = WireInit(0.U.asTypeOf(new DmaReqFlit))
@@ -56,27 +56,29 @@ class ChiREntrys(implicit p: Parameters) extends ZJModule with HasCircularQueueP
  * Pointers Logic
  */
   when(io.axiAr.fire){
-    dEntrys(dHeadPtr.value).chiREntryInit(io.axiAr.bits)
+    dEntrys(dHeadPtr.value).ARMesInit(io.axiAr.bits)
     dHeadPtr := dHeadPtr + 1.U
   }
 
   when(io.respDB.valid){
-    dEntrys(allocDBPtr).chiRAllocDB(io.respDB.bits)
+    dEntrys(allocDBPtr.value).chiRAllocDB(io.respDB.bits)
     allocDBPtr := allocDBPtr + 1.U
   }
 
 /* 
  * Send CHI Req Logic
  */
-  dEntrys(sendReqPtr).haveSendReq := Mux(io.chiReq.fire, true.B, dEntrys(sendReqPtr).haveSendReq)
-  chiReqBdl.RReqInit(dEntrys(sendReqPtr), sendReqPtr)
+  when(io.chiReq.fire){
+    dEntrys(sendReqPtr.value).haveSendReq := true.B
+  }
+
+  chiReqBdl.RReqInit(dEntrys(sendReqPtr.value), sendReqPtr.value)
 
 /* 
  * Receive CHI Resp Logic
  */
-  when(io.chiRsp.fire){
-    assert(io.chiRsp.bits.Opcode === RspOpcode.ReadReceipt)
-    assert(io.chiRsp.bits.TxnID === sendReqPtr)
+  when(io.chiRsp.fire & io.chiRsp.bits.Opcode === RspOpcode.ReadReceipt){
+    assert(io.chiRsp.bits.TxnID === sendReqPtr.value)
     sendReqPtr := sendReqPtr + 1.U
   }
 
@@ -103,8 +105,13 @@ class ChiREntrys(implicit p: Parameters) extends ZJModule with HasCircularQueueP
   io.wrDB.valid     := Mux(dEntrys(dataTxnid).double, io.chiDat.valid, 
                             Mux(fromDCT(io.chiDat.bits.SrcID), Mux(dEntrys(dataTxnid).addr(5), io.chiDat.bits.DataID === 2.U && io.chiDat.valid, 
                               io.chiDat.bits.DataID === 0.U & io.chiDat.valid), io.chiDat.valid))
-  dEntrys(dataTxnid).haveWrDB1 := Mux(io.wrDB.valid && io.chiDat.bits.DataID === 0.U, true.B, dEntrys(dataTxnid).haveWrDB1)
-  dEntrys(dataTxnid).haveWrDB2 := Mux(io.wrDB.valid && io.chiDat.bits.DataID === 2.U, true.B, dEntrys(dataTxnid).haveWrDB2)
+
+  when(io.wrDB.valid & io.chiDat.bits.DataID === 0.U){
+    dEntrys(dataTxnid).haveWrDB1 := true.B
+  }
+  when(io.wrDB.valid & io.chiDat.bits.DataID === 2.U){
+    dEntrys(dataTxnid).haveWrDB2 := true.B
+  }
 
 /* 
  * Read DataBuffer Logic 
@@ -112,21 +119,23 @@ class ChiREntrys(implicit p: Parameters) extends ZJModule with HasCircularQueueP
   readDBBdl.setBdl(dEntrys(readDBPtr.set), readDBPtr)
   when(io.rdDB.fire){
     readDBPtr.PtrRdAdd(dEntrys(readDBPtr.set))
+  }
+  when(io.rdDB.fire & io.rdDB.bits.last){
     dTailPtr := dTailPtr + 1.U
   }
-
  
 /* 
  * IO Interface
  */
   io.axiAr.ready       := !isFull(dHeadPtr, dTailPtr)
-  io.reqDB.valid       := allocDBPtr =/= dHeadPtr.value
-  io.reqDB.bits        := dEntrys(allocDBPtr).double
-  io.chiReq.valid      := sendReqPtr =/= dHeadPtr.value && !dEntrys(sendReqPtr).haveSendReq && dEntrys(sendReqPtr).haveAllocDB
+  io.reqDB.valid       := allocDBPtr =/= dHeadPtr
+  io.reqDB.bits        := dEntrys(allocDBPtr.value).double
+  io.chiReq.valid      := sendReqPtr =/= dHeadPtr && !dEntrys(sendReqPtr.value).haveSendReq && (dEntrys(sendReqPtr.value).haveAllocDB | io.respDB.valid)
   io.chiReq.bits       := chiReqBdl
   io.chiRsp.ready      := true.B
   io.chiDat.ready      := true.B
-  io.rdDB.valid        := readDBPtr.set =/= dHeadPtr.value & (dEntrys(readDBPtr.set).haveWrDB1 & readDBPtr.poi === 0.U | dEntrys(readDBPtr.set).haveWrDB2 & readDBPtr.poi === 1.U)
+  io.rdDB.valid        := dTailPtr =/= dHeadPtr & (dEntrys(readDBPtr.set).haveWrDB1 & dEntrys(readDBPtr.set).haveWrDB2 & dEntrys(readDBPtr.set).double | 
+                          dEntrys(readDBPtr.set).haveWrDB1 & !dEntrys(readDBPtr.set).double)
   io.rdDB.bits         := readDBBdl
 
 /* 
