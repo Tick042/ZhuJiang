@@ -42,16 +42,12 @@ class SocketIcnSideBundle(val node:Node)(implicit p:Parameters) extends Bundle w
   val sync = if(testType("sync")) Some(new IcnBundle(node)) else None
   val async = if(testType("async")) Some(new IcnAsyncBundle(node)) else None
   val c2c = if(testType("c2c")) Some(new C2cBundle) else None
-  val chipRx = if(testType("c2c")) Some(Input(UInt(p(ZJParametersKey).nodeAidBits.W))) else None
-  val chipTx = if(testType("c2c")) Some(Output(UInt(p(ZJParametersKey).nodeAidBits.W))) else None
   val resetTx = Output(AsyncReset())
 
   def <>(that: SocketDevSideBundle):Unit = {
     this.sync.foreach(_ <> that.sync.get)
     this.async.foreach(_ <> that.async.get)
     this.c2c.foreach(_ <=> that.c2c.get)
-    this.chipRx.foreach(_ <> that.chipTx.get)
-    this.chipTx.foreach(_ <> that.chipRx.get)
     that.resetRx := this.resetTx
   }
 }
@@ -61,16 +57,12 @@ class SocketDevSideBundle(val node:Node)(implicit p:Parameters) extends Bundle w
   val sync = if(testType("sync")) Some(new DeviceIcnBundle(node)) else None
   val async = if(testType("async")) Some(new DeviceIcnAsyncBundle(node)) else None
   val c2c = if(testType("c2c")) Some(new C2cBundle) else None
-  val chipRx = if(testType("c2c")) Some(Input(UInt(p(ZJParametersKey).nodeAidBits.W))) else None
-  val chipTx = if(testType("c2c")) Some(Output(UInt(p(ZJParametersKey).nodeAidBits.W))) else None
   val resetRx = Input(AsyncReset())
 
   def <>(that: SocketIcnSideBundle):Unit = {
     this.sync.foreach(_ <> that.sync.get)
     this.async.foreach(_ <> that.async.get)
     this.c2c.foreach(_ <=> that.c2c.get)
-    this.chipRx.foreach(_ <> that.chipTx.get)
-    this.chipTx.foreach(_ <> that.chipRx.get)
     this.resetRx := that.resetTx
   }
 }
@@ -85,7 +77,6 @@ class SocketIcnSide(node:Node)(implicit p:Parameters) extends Module with Socket
   val io = IO(new Bundle {
     val icn = new DeviceIcnBundle(node)
     val socket = new SocketIcnSideBundle(node)
-    val chip = if(testType("c2c")) Some(new SocketChipBundle) else None
   })
   io.socket.resetTx := reset
   if(testType("sync")) {
@@ -98,6 +89,7 @@ class SocketIcnSide(node:Node)(implicit p:Parameters) extends Module with Socket
   }
   if(testType("c2c")) {
     val c2c = Module(new C2cPacker)
+    c2c.io.userTx := DontCare
     connChn(Some(c2c.io.icn.rx.req), io.icn.rx.req)
     connChn(Some(c2c.io.icn.rx.rsp), io.icn.rx.resp)
     connChn(Some(c2c.io.icn.rx.dat), io.icn.rx.data)
@@ -109,9 +101,7 @@ class SocketIcnSide(node:Node)(implicit p:Parameters) extends Module with Socket
     connChn(io.icn.tx.snoop, Some(c2c.io.icn.tx.snp))
 
     io.socket.c2c.get <> c2c.io.c2c
-    io.socket.c2c.get.tx <> Queue(c2c.io.c2c.tx)
-    io.chip.get.remote := io.socket.chipRx.get
-    io.socket.chipTx.get := io.chip.get.local
+    io.socket.c2c.get.tx <> c2c.io.c2c.tx
   }
 }
 
@@ -120,7 +110,6 @@ class SocketDevSide(node:Node)(implicit p:Parameters) extends Module with Socket
   val io = IO(new Bundle {
     val icn = new IcnBundle(node)
     val socket = new SocketDevSideBundle(node)
-    val chip = if(testType("c2c")) Some(new SocketChipBundle) else None
     val resetOut = Output(AsyncReset())
   })
   io.resetOut := io.socket.resetRx
@@ -145,7 +134,5 @@ class SocketDevSide(node:Node)(implicit p:Parameters) extends Module with Socket
     connChn(io.icn.tx.snoop, Some(c2c.io.icn.tx.snp))
 
     io.socket.c2c.get <> c2c.io.c2c
-    io.chip.get.remote := io.socket.chipRx.get
-    io.socket.chipTx.get := io.chip.get.local
   }
 }

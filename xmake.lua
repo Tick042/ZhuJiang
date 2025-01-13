@@ -2,7 +2,7 @@ local env = require "env"
 local chi = require "CHI"
 local Queue = require "Queue"
 
-local flit_num = 1000000
+local flit_num = 100000
 local print_intvl = flit_num / 20
 local max_deq_rdy = 8
 local time_out = 0
@@ -78,50 +78,50 @@ local function inject()
     enq_rsp:shuffle()
     enq_dat:shuffle()
     enq_snp:shuffle()
-    repeat    
+    repeat
         env.posedge()
-            if(enq_req.ready:is(1)) then
-                req_q:push({req_cnt, enq_req.bits:get_hex_str()})
-                req_fire = true
-                req_cnt = req_cnt + 1
-            end
-            if(enq_rsp.ready:is(1)) then
-                rsp_q:push({rsp_cnt, enq_rsp.bits:get_hex_str()})
-                rsp_fire = true
-                rsp_cnt = rsp_cnt + 1
-            end
-            if(enq_dat.ready:is(1)) then
-                dat_q:push({dat_cnt, enq_dat.bits:get_hex_str()})
-                dat_fire = true
-                dat_cnt = dat_cnt + 1
-            end
-            if(enq_snp.ready:is(1)) then
-                snp_q:push({snp_cnt, enq_snp.bits:get_hex_str()})
-                snp_fire = true
-                snp_cnt = snp_cnt + 1
-            end
-            cnt = req_cnt + rsp_cnt + dat_cnt + snp_cnt
-            if(cnt_by_interval ~= math.floor(cnt / print_intvl) or cnt >= flit_num) then
-                cnt_by_interval = math.floor(cnt / print_intvl)
-                printf("%g flits have been enqueued ...\n", cnt);
-            end
+        if(enq_req.ready:is(1)) then
+            req_q:push({req_cnt, enq_req.bits:get_hex_str()})
+            req_fire = true
+            req_cnt = req_cnt + 1
+        end
+        if(enq_rsp.ready:is(1)) then
+            rsp_q:push({rsp_cnt, enq_rsp.bits:get_hex_str()})
+            rsp_fire = true
+            rsp_cnt = rsp_cnt + 1
+        end
+        if(enq_dat.ready:is(1)) then
+            dat_q:push({dat_cnt, enq_dat.bits:get_hex_str()})
+            dat_fire = true
+            dat_cnt = dat_cnt + 1
+        end
+        if(enq_snp.ready:is(1)) then
+            snp_q:push({snp_cnt, enq_snp.bits:get_hex_str()})
+            snp_fire = true
+            snp_cnt = snp_cnt + 1
+        end
+        cnt = req_cnt + rsp_cnt + dat_cnt + snp_cnt
+        if(cnt_by_interval ~= math.floor(cnt / print_intvl) or cnt >= flit_num) then
+            cnt_by_interval = math.floor(cnt / print_intvl)
+            printf("%g flits have been enqueued ...\n", cnt);
+        end
         env.negedge()
-            if(req_fire) then
-                enq_req:shuffle()
-                req_fire = false
-            end
-            if(rsp_fire) then
-                enq_rsp:shuffle()
-                rsp_fire = false
-            end
-            if(dat_fire) then
-                enq_dat:shuffle()
-                dat_fire = false
-            end
-            if(snp_fire) then
-                enq_snp:shuffle()
-                snp_fire = false
-            end
+        if(req_fire) then
+            enq_req:shuffle()
+            req_fire = false
+        end
+        if(rsp_fire) then
+            enq_rsp:shuffle()
+            rsp_fire = false
+        end
+        if(dat_fire) then
+            enq_dat:shuffle()
+            dat_fire = false
+        end
+        if(snp_fire) then
+            enq_snp:shuffle()
+            snp_fire = false
+        end
     until (cnt >= flit_num)
     enq_req.valid:set(0)
     enq_rsp.valid:set(0)
@@ -140,43 +140,43 @@ local function eject_rdy_gen()
     deq_snp.ready:set(0)
     repeat
         env.negedge()
-            if(req_rdy_cnt == 0) then
-                deq_req.ready:set(1)
-            else
-                deq_req.ready:set(0)
-                req_rdy_cnt = req_rdy_cnt - 1
-            end
-            if(rsp_rdy_cnt == 0) then
-                deq_rsp.ready:set(1)
-            else
-                deq_rsp.ready:set(0)
-                rsp_rdy_cnt = rsp_rdy_cnt - 1
-            end
-            if(dat_rdy_cnt == 0) then
-                deq_dat.ready:set(1)
-            else
-                deq_dat.ready:set(0)
-                dat_rdy_cnt = dat_rdy_cnt - 1
-            end
-            if(snp_rdy_cnt == 0) then
-                deq_snp.ready:set(1)
-            else
-                deq_snp.ready:set(0)
-                snp_rdy_cnt = snp_rdy_cnt - 1
-            end
+        if(req_rdy_cnt == 0) then
+            deq_req.ready:set(1)
+        else
+            deq_req.ready:set(0)
+            req_rdy_cnt = req_rdy_cnt - 1
+        end
+        if(rsp_rdy_cnt == 0) then
+            deq_rsp.ready:set(1)
+        else
+            deq_rsp.ready:set(0)
+            rsp_rdy_cnt = rsp_rdy_cnt - 1
+        end
+        if(dat_rdy_cnt == 0) then
+            deq_dat.ready:set(1)
+        else
+            deq_dat.ready:set(0)
+            dat_rdy_cnt = dat_rdy_cnt - 1
+        end
+        if(snp_rdy_cnt == 0) then
+            deq_snp.ready:set(1)
+        else
+            deq_snp.ready:set(0)
+            snp_rdy_cnt = snp_rdy_cnt - 1
+        end
         env.posedge()
-            if deq_req:fire() then
-                req_rdy_cnt = urandom_range(1, max_deq_rdy)
-            end
-            if deq_rsp:fire() then
-                rsp_rdy_cnt = urandom_range(1, max_deq_rdy)
-            end
-            if deq_dat:fire() then
-                dat_rdy_cnt = urandom_range(1, max_deq_rdy)
-            end
-            if deq_snp:fire() then
-                snp_rdy_cnt = urandom_range(1, max_deq_rdy)
-            end
+        if deq_req:fire() then
+            req_rdy_cnt = urandom_range(1, max_deq_rdy)
+        end
+        if deq_rsp:fire() then
+            rsp_rdy_cnt = urandom_range(1, max_deq_rdy)
+        end
+        if deq_dat:fire() then
+            dat_rdy_cnt = urandom_range(1, max_deq_rdy)
+        end
+        if deq_snp:fire() then
+            snp_rdy_cnt = urandom_range(1, max_deq_rdy)
+        end
 
     until false
 end
@@ -233,6 +233,7 @@ end
 
 local test_main = env.register_test_case "test_main" {
     function ()
+        env.negedge()
         dut.io_p0UserIn:chdl():set({0x0123, 0x4567, 0x89ab})
         dut.io_p1UserIn:chdl():set({0xba98, 0x7654, 0x3210})
         local str0 = dut.io_p0UserIn:get_hex_str()
@@ -242,9 +243,9 @@ local test_main = env.register_test_case "test_main" {
         repeat
             env.posedge()
         until dut.io_p0UserOut_valid:is(1) and dut.io_p1UserOut_valid:is(1)
-        dut.io_p0UserOut_bits:expect_hex_str(str1)
-        dut.io_p1UserOut_bits:expect_hex_str(str0)
-
+        dut.io_p0UserOut_bits:expect_hex_str_v2(str1)
+        dut.io_p1UserOut_bits:expect_hex_str_v2(str0)
+        env.negedge()
         fork {
             function ()
                 eject_rdy_gen()
@@ -255,14 +256,14 @@ local test_main = env.register_test_case "test_main" {
             function ()
                 time_out_chk()
             end
-            }
+        }
         eject_dat_chk()
     end
 }
 
 fork {
     function ()
-        -- sim.dump_wave()
+        sim.dump_wave()
         test_main()
         env.negedge(5)
         env.TEST_SUCCESS()

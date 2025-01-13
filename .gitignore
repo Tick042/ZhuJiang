@@ -8,4 +8,5 @@ temp
 hs_err_pid*
 .metals
 .vscode
+.xmake
 
