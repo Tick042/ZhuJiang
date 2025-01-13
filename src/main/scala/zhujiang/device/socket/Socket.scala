@@ -123,6 +123,7 @@ class SocketDevSide(node:Node)(implicit p:Parameters) extends Module with Socket
   }
   if(testType("c2c")) {
     val c2c = Module(new C2cPacker)
+    c2c.io.userTx := DontCare
     connChn(Some(c2c.io.icn.rx.req), io.icn.rx.req)
     connChn(Some(c2c.io.icn.rx.rsp), io.icn.rx.resp)
     connChn(Some(c2c.io.icn.rx.dat), io.icn.rx.data)
