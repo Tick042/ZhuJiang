@@ -66,6 +66,8 @@ import zhujiang.HasZJParams
  *
  */
 
+// TODO: update XSPerfAccumulate
+
 @instantiable
 class ProtocolCtrlUnit(localHf: Node, csnRf: Option[Node] = None, csnHf: Option[Node] = None)(implicit p: Parameters) extends DJRawModule
   with ImplicitClock with ImplicitReset {
