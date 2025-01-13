@@ -105,8 +105,6 @@ class DataCtrlUnit(nodes: Seq[Node])(implicit p: Parameters) extends DJRawModule
 
   require(1 <= nodes.length & nodes.length <= 2)
 
-  io <> DontCare
-
 // ----------------------------------------- Reg and Wire declaration ------------------------------------ //
   // CHI
   val rxReq     = Wire(new DecoupledIO(new ReqFlit(true)))
