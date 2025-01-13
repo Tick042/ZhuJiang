@@ -9,6 +9,7 @@ import zhujiang.{ZJBundle, ZJModule}
 import xs.utils.FastArbiter
 import zhujiang.axi._
 import zhujiang.chi._
+import xs.utils.perf.{DebugOptions, DebugOptionsKey}
 
 case class DmaParams(
   chiEntrySize: Int = 16,
@@ -27,6 +28,11 @@ class Axi2Chi(node: Node)(implicit p: Parameters) extends ZJModule {
   val axi = IO(Flipped(new AxiBundle(axiParams)))
   val icn = IO(new DeviceIcnBundle(node))
 
+  // For Debug
+  if (p(DebugOptionsKey).EnableDebug) {
+    dontTouch(axi)
+    dontTouch(icn)
+  }
 
   // //SubModule
   private val axiSpilt    = Module(new AxiSpilt)
