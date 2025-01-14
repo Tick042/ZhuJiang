@@ -201,6 +201,7 @@ trait NocIOHelper {
     ccnIO.zip(ccnDrv).foreach({ case (a, b) =>
       a.suggestName(s"ccn_0x${b.node.nodeId.toHexString}")
       a <> b
+      dontTouch(a)
     })
   }
 }

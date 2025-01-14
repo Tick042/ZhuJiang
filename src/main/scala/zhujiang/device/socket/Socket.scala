@@ -6,6 +6,7 @@ import org.chipsalliance.cde.config.Parameters
 import xijiang.Node
 import xijiang.c2c.{C2cBundle, C2cPacker, C2cUtils}
 import xijiang.router.base.{DeviceIcnBundle, IcnBundle}
+import xs.utils.ResetGen
 import zhujiang.ZJParametersKey
 
 object SocketType {
@@ -43,6 +44,7 @@ class SocketIcnSideBundle(val node:Node)(implicit p:Parameters) extends Bundle w
   val async = if(testType("async")) Some(new IcnAsyncBundle(node)) else None
   val c2c = if(testType("c2c")) Some(new C2cBundle) else None
   val resetTx = Output(AsyncReset())
+  val c2cClock = if(testType("c2c")) Some(Input(Clock())) else None
 
   def <>(that: SocketDevSideBundle):Unit = {
     this.sync.foreach(_ <> that.sync.get)
@@ -58,6 +60,7 @@ class SocketDevSideBundle(val node:Node)(implicit p:Parameters) extends Bundle w
   val async = if(testType("async")) Some(new DeviceIcnAsyncBundle(node)) else None
   val c2c = if(testType("c2c")) Some(new C2cBundle) else None
   val resetRx = Input(AsyncReset())
+  val c2cClock = if(testType("c2c")) Some(Input(Clock())) else None
 
   def <>(that: SocketIcnSideBundle):Unit = {
     this.sync.foreach(_ <> that.sync.get)
@@ -88,20 +91,29 @@ class SocketIcnSide(node:Node)(implicit p:Parameters) extends Module with Socket
     io.socket.async.get <> asyncModule.io.async
   }
   if(testType("c2c")) {
+    val resetGen = Module(new ResetGen())
+    val asyncIcnModule = Module(new IcnSideAsyncModule(node))
+    val asyncDevModule = Module(new DeviceSideAsyncModule(node))
     val c2c = Module(new C2cPacker)
+    asyncIcnModule.io.icn <> io.icn
+    asyncDevModule.io.async <> asyncIcnModule.io.async
     c2c.io.userTx := DontCare
-    connChn(Some(c2c.io.icn.rx.req), io.icn.rx.req)
-    connChn(Some(c2c.io.icn.rx.rsp), io.icn.rx.resp)
-    connChn(Some(c2c.io.icn.rx.dat), io.icn.rx.data)
-    connChn(Some(c2c.io.icn.rx.snp), io.icn.rx.snoop)
+    connChn(Some(c2c.io.icn.rx.req), asyncDevModule.io.icn.tx.req)
+    connChn(Some(c2c.io.icn.rx.rsp), asyncDevModule.io.icn.tx.resp)
+    connChn(Some(c2c.io.icn.rx.dat), asyncDevModule.io.icn.tx.data)
+    connChn(Some(c2c.io.icn.rx.snp), asyncDevModule.io.icn.tx.snoop)
 
-    connChn(io.icn.tx.req, Some(c2c.io.icn.tx.req))
-    connChn(io.icn.tx.resp, Some(c2c.io.icn.tx.rsp))
-    connChn(io.icn.tx.data, Some(c2c.io.icn.tx.dat))
-    connChn(io.icn.tx.snoop, Some(c2c.io.icn.tx.snp))
+    connChn(asyncDevModule.io.icn.rx.req, Some(c2c.io.icn.tx.req))
+    connChn(asyncDevModule.io.icn.rx.resp, Some(c2c.io.icn.tx.rsp))
+    connChn(asyncDevModule.io.icn.rx.data, Some(c2c.io.icn.tx.dat))
+    connChn(asyncDevModule.io.icn.rx.snoop, Some(c2c.io.icn.tx.snp))
+
+    asyncDevModule.clock := io.socket.c2cClock.get
+    asyncDevModule.reset := resetGen.o_reset
+    c2c.clock := io.socket.c2cClock.get
+    c2c.reset := resetGen.o_reset
 
     io.socket.c2c.get <> c2c.io.c2c
-    io.socket.c2c.get.tx <> c2c.io.c2c.tx
   }
 }
 
@@ -122,17 +134,28 @@ class SocketDevSide(node:Node)(implicit p:Parameters) extends Module with Socket
     io.socket.async.get <> asyncModule.io.async
   }
   if(testType("c2c")) {
+    val resetGen = Module(new ResetGen())
+    val asyncDevModule = Module(new DeviceSideAsyncModule(node))
+    val asyncIcnModule = Module(new IcnSideAsyncModule(node))
     val c2c = Module(new C2cPacker)
-    c2c.io.userTx := DontCare
-    connChn(Some(c2c.io.icn.rx.req), io.icn.rx.req)
-    connChn(Some(c2c.io.icn.rx.rsp), io.icn.rx.resp)
-    connChn(Some(c2c.io.icn.rx.dat), io.icn.rx.data)
-    connChn(Some(c2c.io.icn.rx.snp), io.icn.rx.snoop)
+    asyncDevModule.io.icn <> io.icn
+    asyncIcnModule.io.async <> asyncDevModule.io.async
 
-    connChn(io.icn.tx.req, Some(c2c.io.icn.tx.req))
-    connChn(io.icn.tx.resp, Some(c2c.io.icn.tx.rsp))
-    connChn(io.icn.tx.data, Some(c2c.io.icn.tx.dat))
-    connChn(io.icn.tx.snoop, Some(c2c.io.icn.tx.snp))
+    c2c.io.userTx := DontCare
+    connChn(Some(c2c.io.icn.rx.req), asyncIcnModule.io.icn.tx.req)
+    connChn(Some(c2c.io.icn.rx.rsp), asyncIcnModule.io.icn.tx.resp)
+    connChn(Some(c2c.io.icn.rx.dat), asyncIcnModule.io.icn.tx.data)
+    connChn(Some(c2c.io.icn.rx.snp), asyncIcnModule.io.icn.tx.snoop)
+
+    connChn(asyncIcnModule.io.icn.rx.req, Some(c2c.io.icn.tx.req))
+    connChn(asyncIcnModule.io.icn.rx.resp, Some(c2c.io.icn.tx.rsp))
+    connChn(asyncIcnModule.io.icn.rx.data, Some(c2c.io.icn.tx.dat))
+    connChn(asyncIcnModule.io.icn.rx.snoop, Some(c2c.io.icn.tx.snp))
+
+    asyncIcnModule.clock := io.socket.c2cClock.get
+    asyncIcnModule.reset := resetGen.o_reset
+    c2c.clock := io.socket.c2cClock.get
+    c2c.reset := resetGen.o_reset
 
     io.socket.c2c.get <> c2c.io.c2c
   }
