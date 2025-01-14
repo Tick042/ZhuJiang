@@ -15,17 +15,21 @@ object FastArb {
             a <> req
         }
         out <> arb.io.out
+        out.bits := Mux(arb.io.out.valid, arb.io.out.bits, 0.U.asTypeOf(arb.io.out))
     }
 
     def fastArbDec[T <: Bundle](in: Seq[DecoupledIO[T]], name: Option[String] = None): DecoupledIO[T] = {
         val arb = Module(new FastArbiter[T](chiselTypeOf(in(0).bits), in.size))
+        val out = Wire(chiselTypeOf(in(0)))
         if (name.nonEmpty) {
             arb.suggestName(s"${name.get}_arb")
         }
         for ((a, req) <- arb.io.in.zip(in)) {
             a <> req
         }
-        arb.io.out
+        out <> arb.io.out
+        out.bits := Mux(arb.io.out.valid, arb.io.out.bits, 0.U.asTypeOf(arb.io.out.bits))
+        out
     }
 
     def fastArbDec2Val[T <: Bundle](in: Seq[DecoupledIO[T]], out: ValidIO[T], name: Option[String] = None): Unit = {
@@ -37,7 +41,7 @@ object FastArb {
             a <> req
         }
         arb.io.out.ready := true.B
-        out.bits := arb.io.out.bits
+        out.bits := Mux(arb.io.out.valid, arb.io.out.bits, 0.U.asTypeOf(arb.io.out.bits))
         out.valid := arb.io.out.valid
     }
 
@@ -50,18 +54,21 @@ object FastArb {
             a <> req
         }
         arb.io.out.ready := true.B
-        out.bits := arb.io.out.bits
+        out.bits := Mux(arb.io.out.valid, arb.io.out.bits, 0.U.asTypeOf(arb.io.out.bits))
         out.valid := arb.io.out.valid
     }
 
     def fastPriorityArbDec[T <: Bundle](in: Seq[DecoupledIO[T]], name: Option[String] = None): DecoupledIO[T] = {
         val arb = Module(new Arbiter[T](chiselTypeOf(in(0).bits), in.size))
+        val out = Wire(chiselTypeOf(in(0)))
         if (name.nonEmpty) {
             arb.suggestName(s"${name.get}_arb")
         }
         for ((a, req) <- arb.io.in.zip(in)) {
             a <> req
         }
-        arb.io.out
+        out <> arb.io.out
+        out.bits := Mux(arb.io.out.valid, arb.io.out.bits, 0.U.asTypeOf(arb.io.out.bits))
+        out
     }
 }
