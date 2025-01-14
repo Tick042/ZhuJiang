@@ -112,6 +112,7 @@ class SocketIcnSide(node:Node)(implicit p:Parameters) extends Module with Socket
     asyncDevModule.reset := resetGen.o_reset
     c2c.clock := io.socket.c2cClock.get
     c2c.reset := resetGen.o_reset
+    resetGen.dft := DontCare
 
     io.socket.c2c.get <> c2c.io.c2c
   }
@@ -156,6 +157,7 @@ class SocketDevSide(node:Node)(implicit p:Parameters) extends Module with Socket
     asyncIcnModule.reset := resetGen.o_reset
     c2c.clock := io.socket.c2cClock.get
     c2c.reset := resetGen.o_reset
+    resetGen.dft := DontCare
 
     io.socket.c2c.get <> c2c.io.c2c
   }
