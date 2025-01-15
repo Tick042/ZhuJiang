@@ -90,8 +90,8 @@ trait BaseRouterUtils {
 
   private val ejectBufSizeMap = Map[String, Int](
     "REQ" -> p(ZJParametersKey).reqEjectBufDepth,
-    "RSP" -> 0,
-    "DAT" -> 0,
+    "RSP" -> 3,
+    "DAT" -> 3,
     "SNP" -> p(ZJParametersKey).snoopEjectBufDepth,
     "ERQ" -> p(ZJParametersKey).reqEjectBufDepth
   )
