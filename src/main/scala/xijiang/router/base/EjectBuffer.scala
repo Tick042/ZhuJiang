@@ -7,20 +7,83 @@ import xs.utils.PickOneLow
 import zhujiang.ZJModule
 import zhujiang.chi.Flit
 
+class VipTable[T <: Data](gen:T, size: Int) extends Module {
+  val io = IO(new Bundle {
+    val update = Input(Valid(new Bundle {
+      val tag = gen.cloneType
+      val rel = Bool()
+    }))
+    val vip = Output(Valid(gen))
+  })
+  private val valids = RegInit(VecInit(Seq.fill(size)(false.B)))
+  private val table = Reg(Vec(size, gen))
+  private val vipPtrOH = RegInit(1.U(size.W))
+  private val enqIdxOH = PriorityEncoderOH(valids.map(!_))
+
+  when(io.update.valid && !io.update.bits.rel) {
+    assert(Cat(valids.map(!_)).orR)
+  }
+  when(io.update.valid && io.update.bits.rel) {
+    val hitVec = valids.zip(table).map({case(a, b) => a && b === io.update.bits.tag})
+    assert(PopCount(hitVec) <= 1.U)
+  }
+  for(idx <- table.indices) {
+    val enq = io.update.valid && !io.update.bits.rel && enqIdxOH(idx)
+    val rel = io.update.valid && io.update.bits.rel && io.update.bits.tag === table(idx)
+    valids(idx) := Mux(enq, true.B, Mux(rel, false.B, valids(idx)))
+    when(enq) {
+      table(idx) := io.update.bits.tag
+    }
+  }
+  io.vip.valid := Mux1H(vipPtrOH, valids)
+  io.vip.bits := Mux1H(vipPtrOH, table)
+
+  private val highMaskVec = Wire(Vec(size, Bool()))
+  private val lowMaskVec = Wire(Vec(size, Bool()))
+  dontTouch(highMaskVec)
+  dontTouch(lowMaskVec)
+  private val highMask = highMaskVec.asUInt
+  private val lowMask = lowMaskVec.asUInt
+  private val validMask = valids.asUInt
+  for(idx <- 0 until size) {
+    if(idx == 0) {
+      highMaskVec(idx) := false.B
+    } else {
+      highMaskVec(idx) := vipPtrOH(idx - 1, 0).orR
+    }
+    if(idx == size - 1) {
+      lowMaskVec(idx) := false.B
+    } else {
+      lowMaskVec(idx) := vipPtrOH(size - 1, idx + 1).orR
+    }
+    assert(PopCount(Seq(highMaskVec(idx), lowMaskVec(idx), vipPtrOH(idx))) === 1.U)
+  }
+
+  private val highValidMask = highMask & validMask
+  private val lowValidMask = lowMask & validMask
+  private val highPtrNext = PriorityEncoderOH(highValidMask)
+  private val lowPtrNext = PriorityEncoderOH(lowValidMask)
+  private val ptrMove = !io.vip.valid && validMask.orR
+  private val ptrNext = Mux(highValidMask.orR, highPtrNext, lowPtrNext)
+  when(ptrMove) {
+    vipPtrOH := ptrNext
+    assert((ptrNext & validMask).orR)
+  }
+}
+
 class EjectBuffer[T <: Flit](gen: T, size: Int, chn: String)(implicit p: Parameters) extends ZJModule {
-  private val tagBits = 12 + niw // SrcId + TxnId
+  private def getTag(flit: Flit): UInt = Cat(flit.src, flit.txn)
   require(size >= 3)
   val io = IO(new Bundle {
     val enq = Flipped(Decoupled(gen))
     val deq = Decoupled(gen)
   })
   override val desiredName = s"EjectBuffer$chn"
+  private val flitTag = getTag(io.enq.bits)
   private val oqueue = Module(new Queue(gen, size - 1))
-  private val ipipe = Module(new Queue(gen, 1, pipe = true) )
-  private val rsvdTags = Reg(Vec(size, UInt(tagBits.W)))
-  private val rsvdValids = RegInit(VecInit(Seq.fill(size)(false.B)))
+  private val ipipe = Module(new Queue(gen, 1, pipe = true))
+  private val vipTable = Module(new VipTable(UInt(flitTag.getWidth.W), zjParams.localRing.size))
   private val empties = RegInit(size.U(log2Ceil(size + 1).W))
-  private val rsvdNumReg = RegInit(0.U(log2Ceil(size + 1).W))
 
   oqueue.io.enq <> ipipe.io.deq
   io.deq <> oqueue.io.deq
@@ -37,35 +100,12 @@ class EjectBuffer[T <: Flit](gen: T, size: Int, chn: String)(implicit p: Paramet
     assert(ipipe.io.enq.ready)
   }
 
-  private def getTag(flit: Flit): UInt = Cat(flit.src, flit.txn)
+  vipTable.io.update.valid := io.enq.valid
+  vipTable.io.update.bits.rel := io.enq.ready
+  vipTable.io.update.bits.tag := flitTag
 
-  private val rsvdSel = PickOneLow(rsvdValids)
-  private val rsvdHit = Cat(rsvdTags.zip(rsvdValids).map(e => e._1 === getTag(io.enq.bits) && e._2)).orR
-  private val doReserve = io.enq.valid && !io.enq.ready && !rsvdHit && rsvdSel.valid
-
-  when(rsvdHit && ipipe.io.enq.fire) {
-    rsvdNumReg := rsvdNumReg - 1.U
-  }.elsewhen(doReserve) {
-    rsvdNumReg := rsvdNumReg + 1.U
-  }
-  assert(rsvdNumReg === PopCount(rsvdValids))
-
-  for(idx <- rsvdValids.indices) {
-    val v = rsvdValids(idx)
-    val tag = rsvdTags(idx)
-    val doRsv = rsvdSel.bits(idx) && doReserve
-    when(v && ipipe.io.enq.fire && getTag(io.enq.bits) === tag) {
-      v := false.B
-    }.elsewhen(doRsv) {
-      v := true.B
-    }
-    when(doRsv) {
-      tag := getTag(io.enq.bits)
-    }
-  }
-
-  private val allowEnq = Mux(rsvdHit, true.B, rsvdNumReg < empties)
+  private val allowEnq = Mux(empties === 1.U, flitTag === vipTable.io.vip.bits && vipTable.io.vip.valid, true.B)
   ipipe.io.enq.valid := io.enq.valid & allowEnq
   ipipe.io.enq.bits := io.enq.bits
-  io.enq.ready := ipipe.io.enq.ready & allowEnq
+  io.enq.ready := empties.orR & allowEnq
 }
