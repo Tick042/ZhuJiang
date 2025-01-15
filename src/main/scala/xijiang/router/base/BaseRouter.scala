@@ -33,9 +33,9 @@ class RingSide(local: Boolean)(implicit p: Parameters) extends ZJBundle {
   }
 }
 
-class RouterRingIO(csn: Boolean)(implicit p: Parameters) extends ZJBundle {
-  val tx = Output(new RingSide(csn))
-  val rx = Input(new RingSide(csn))
+class RouterRingIO(local: Boolean)(implicit p: Parameters) extends ZJBundle {
+  val tx = Output(new RingSide(local))
+  val rx = Input(new RingSide(local))
 }
 
 class ResetRingIO extends Bundle {
