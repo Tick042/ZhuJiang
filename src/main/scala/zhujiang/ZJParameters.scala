@@ -57,7 +57,7 @@ object ZhujiangGlobal {
     require(nodeParams.size >= 3)
     var ccId: Long = 0
     val rnfs = nodeParams.filter(_.nodeType == NodeType.RF)
-    val sns = nodeParams.filter(_.nodeType == NodeType.S)
+    val sns = nodeParams.filter(n => n.nodeType == NodeType.S && !n.mainMemory)
     val hnfs = nodeParams.filter(_.nodeType == NodeType.HF)
 
     val rnfBankBits = if(csn && rnfs.length > 1) getBankBits(rnfs) else 0
