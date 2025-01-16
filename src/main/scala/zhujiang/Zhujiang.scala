@@ -11,7 +11,7 @@ import xijiang.router.base.IcnBundle
 import xs.utils.debug.{DomainInfo, HardwareAssertion}
 import xs.utils.sram.SramBroadcastBundle
 import xs.utils.{DFTResetSignals, ResetGen}
-import zhujiang.axi.AxiBundle
+import zhujiang.axi.{AxiBundle, ExtAxiBundle}
 import zhujiang.device.bridge.axilite.AxiLiteBridge
 import zhujiang.device.socket.{SocketIcnSide, SocketIcnSideBundle}
 import zhujiang.device.ddr.MemoryComplex
@@ -180,22 +180,22 @@ trait NocIOHelper {
   def dmaDrv: Seq[AxiBundle]
   def ccnDrv: Seq[SocketIcnSideBundle]
 
-  lazy val ddrIO: AxiBundle = IO(new AxiBundle(ddrDrv.params))
-  lazy val cfgIO: Seq[AxiBundle] = cfgDrv.map(drv => IO(new AxiBundle(drv.params)))
-  lazy val dmaIO: Seq[AxiBundle] = dmaDrv.map(drv => IO(Flipped(new AxiBundle(drv.params))))
+  lazy val ddrIO: ExtAxiBundle = IO(new ExtAxiBundle(ddrDrv.params))
+  lazy val cfgIO: Seq[ExtAxiBundle] = cfgDrv.map(drv => IO(new ExtAxiBundle(drv.params)))
+  lazy val dmaIO: Seq[ExtAxiBundle] = dmaDrv.map(drv => IO(Flipped(new ExtAxiBundle(drv.params))))
   lazy val ccnIO: Seq[SocketIcnSideBundle] = ccnDrv.map(drv => IO(new SocketIcnSideBundle(drv.node)(p)))
 
   def runIOAutomation():Unit = {
     ddrIO <> ddrDrv
-    ddrIO.suggestName("m_ddr")
+    ddrIO.suggestName("m_axi_ddr")
     cfgIO.zip(cfgDrv).zipWithIndex.foreach({ case((a, b), i) =>
-      if(b.params.attr != "") a.suggestName(s"m_cfg_${b.params.attr}")
-      else a.suggestName(s"m_cfg_$i")
+      if(b.params.attr != "") a.suggestName(s"m_axi_cfg_${b.params.attr}")
+      else a.suggestName(s"m_axi_cfg_$i")
       a <> b
     })
     dmaIO.zip(dmaDrv).zipWithIndex.foreach({ case((a, b), i) =>
       if(b.params.attr != "") a.suggestName(s"s_dma_${b.params.attr}")
-      else a.suggestName(s"s_dma_$i")
+      else a.suggestName(s"s_axi_dma_$i")
       a <> b
     })
     ccnIO.zip(ccnDrv).foreach({ case (a, b) =>
