@@ -74,7 +74,7 @@ class VipTable[T <: Data](gen:T, size: Int) extends Module {
 }
 
 class EjectBuffer[T <: Flit](gen: T, size: Int, chn: String)(implicit p: Parameters) extends ZJModule {
-  private def getTag(flit: Flit): UInt = Cat(flit.src, flit.txn)
+  private def getTag(flit: Flit): UInt = if(chn == "DAT") Cat(flit.src, flit.txn, flit.tgt, flit.did) else Cat(flit.src, flit.txn, flit.tgt)
   require(size >= 3)
   val io = IO(new Bundle {
     val enq = Flipped(Decoupled(gen))

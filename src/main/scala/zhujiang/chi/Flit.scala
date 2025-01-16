@@ -9,6 +9,7 @@ class Flit(implicit p: Parameters) extends Bundle {
   def src = elements("SrcID").asInstanceOf[UInt]
   def tgt = elements("TgtID").asInstanceOf[UInt]
   def txn = elements("TxnID").asInstanceOf[UInt]
+  def did = elements("DataID").asInstanceOf[UInt]
   lazy val zjParams = p(ZJParametersKey)
   lazy val M = zjParams.M
   lazy val PB = zjParams.PB
