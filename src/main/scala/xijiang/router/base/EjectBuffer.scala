@@ -20,16 +20,18 @@ class VipTable[T <: Data](gen:T, size: Int) extends Module {
   private val vipPtrOH = RegInit(1.U(size.W))
   private val enqIdxOH = PriorityEncoderOH(valids.map(!_))
 
-  when(io.update.valid && !io.update.bits.rel) {
+  private val tagHitExisted = valids.zip(table).map(e => e._1 && e._2 === io.update.bits.tag)
+  private val tagExisted = Cat(tagHitExisted).orR
+  private val doAlloc = io.update.valid && !tagExisted && !io.update.bits.rel
+  when(io.update.valid) {
+    assert(PopCount(tagHitExisted) <= 1.U)
+  }
+  when(doAlloc) {
     assert(Cat(valids.map(!_)).orR)
   }
-  when(io.update.valid && io.update.bits.rel) {
-    val hitVec = valids.zip(table).map({case(a, b) => a && b === io.update.bits.tag})
-    assert(PopCount(hitVec) <= 1.U)
-  }
   for(idx <- table.indices) {
-    val enq = io.update.valid && !io.update.bits.rel && enqIdxOH(idx)
-    val rel = io.update.valid && io.update.bits.rel && io.update.bits.tag === table(idx)
+    val enq = doAlloc && enqIdxOH(idx)
+    val rel = io.update.valid && io.update.bits.rel && tagHitExisted(idx)
     valids(idx) := Mux(enq, true.B, Mux(rel, false.B, valids(idx)))
     when(enq) {
       table(idx) := io.update.bits.tag
@@ -100,9 +102,9 @@ class EjectBuffer[T <: Flit](gen: T, size: Int, chn: String)(implicit p: Paramet
     assert(ipipe.io.enq.ready)
   }
 
-  vipTable.io.update.valid := io.enq.valid
-  vipTable.io.update.bits.rel := io.enq.ready
-  vipTable.io.update.bits.tag := flitTag
+  vipTable.io.update.valid := RegNext(io.enq.valid, false.B)
+  vipTable.io.update.bits.rel := RegNext(io.enq.ready, true.B)
+  vipTable.io.update.bits.tag := RegEnable(flitTag, io.enq.valid)
 
   private val allowEnq = Mux(empties === 1.U, flitTag === vipTable.io.vip.bits && vipTable.io.vip.valid, true.B)
   ipipe.io.enq.valid := io.enq.valid & allowEnq
