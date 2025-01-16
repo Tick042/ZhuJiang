@@ -68,9 +68,9 @@ case class Node(
 
   def genRouter(p: Parameters): BaseRouter = {
     val res = nodeType match {
-      case NodeType.CC => Module(new RxReqRouter(this)(p))
-      case NodeType.RF => Module(new RxReqRouter(this)(p))
-      case NodeType.RI => Module(new RxReqRouter(this)(p))
+      case NodeType.CC => Module(new RnRouter(this)(p))
+      case NodeType.RF => Module(new RnRouter(this)(p))
+      case NodeType.RI => Module(new RnRouter(this)(p))
       case NodeType.HF => Module(new BaseRouter(this)(p))
       case NodeType.HI => Module(new BaseRouter(this)(p))
       case NodeType.C => Module(new ChipToChipRouter(this)(p))

@@ -8,7 +8,7 @@ import zhujiang.ZJParametersKey
 import zhujiang.chi._
 
 package object router {
-  class RxReqRouter(node: Node)(implicit p: Parameters) extends BaseRouter(node) {
+  class RnRouter(node: Node)(implicit p: Parameters) extends BaseRouter(node) {
     require(node.nodeType == NodeType.CC || node.nodeType == NodeType.RF || node.nodeType == NodeType.RI)
     private val injectAddr = icn.rx.req.get.bits.asTypeOf(new ReqFlit).Addr.asTypeOf(new ReqAddrBundle)
     private val reqTarget = if(node.csnNode) {
