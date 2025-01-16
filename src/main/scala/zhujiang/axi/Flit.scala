@@ -71,6 +71,18 @@ object AxiUtils {
       }
     }
   }
+
+  def getExtnl(intnl: AxiBundle):ExtAxiBundle = {
+    val extnl = Wire(new ExtAxiBundle(intnl.params))
+    extnl <> intnl
+    extnl
+  }
+
+  def getIntnl(extnl: ExtAxiBundle):AxiBundle = {
+    val intnl = Wire(new AxiBundle(extnl.params))
+    intnl <> extnl
+    intnl
+  }
 }
 
 class AxiBundle(val params: AxiParams) extends Bundle {
