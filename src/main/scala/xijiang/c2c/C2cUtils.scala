@@ -105,6 +105,9 @@ class TxQueue[T <: Data](gen: T, val chnId:Int) extends Module with HasCircularQ
   private val grantTokenValidReg = RegNext(io.grant.valid, false.B)
   private val grantTokenNumReg = RegEnable(1.U << io.grant.bits, io.grant.valid)
   private val fireTokenNum = Mux(flitQueue.io.deq.fire, 1.U, 0.U)
+  when(flitQueue.io.deq.fire) {
+    assert(tokens.orR)
+  }
   when(flitQueue.io.deq.fire || grantTokenValidReg) {
     tokens := tokens - fireTokenNum + Mux(grantTokenValidReg, grantTokenNumReg, 0.U)
   }
