@@ -70,11 +70,6 @@ class SocketDevSideBundle(val node:Node)(implicit p:Parameters) extends Bundle w
   }
 }
 
-class SocketChipBundle(implicit p:Parameters) extends Bundle {
-  val remote = Output(UInt(p(ZJParametersKey).nodeAidBits.W))
-  val local = Input(UInt(p(ZJParametersKey).nodeAidBits.W))
-}
-
 class SocketIcnSide(node:Node)(implicit p:Parameters) extends Module with SocketCommon {
   val socketType = node.socket
   val io = IO(new Bundle {
@@ -112,6 +107,7 @@ class SocketIcnSide(node:Node)(implicit p:Parameters) extends Module with Socket
     asyncDevModule.reset := resetGen.o_reset
     c2c.clock := io.socket.c2cClock.get
     c2c.reset := resetGen.o_reset
+    resetGen.clock := io.socket.c2cClock.get
     resetGen.dft := DontCare
 
     io.socket.c2c.get <> c2c.io.c2c
@@ -157,6 +153,7 @@ class SocketDevSide(node:Node)(implicit p:Parameters) extends Module with Socket
     asyncIcnModule.reset := resetGen.o_reset
     c2c.clock := io.socket.c2cClock.get
     c2c.reset := resetGen.o_reset
+    resetGen.clock := io.socket.c2cClock.get
     resetGen.dft := DontCare
 
     io.socket.c2c.get <> c2c.io.c2c
