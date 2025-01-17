@@ -7,7 +7,6 @@ import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config._
 import xs.utils._
-import dongjiang.utils.FastArb._
 import xijiang.router.base.DeviceIcnBundle
 import xijiang.Node
 import xs.utils.perf.DebugOptionsKey

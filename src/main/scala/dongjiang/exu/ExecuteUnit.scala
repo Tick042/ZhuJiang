@@ -5,8 +5,7 @@ import dongjiang.pcu._
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config._
-import xs.utils._
-import dongjiang.utils.FastArb._
+import dongjiang.utils.fastArb
 
 class ExecuteUnit(implicit p: Parameters) extends DJModule {
 // --------------------- IO declaration ------------------------//
@@ -57,9 +56,9 @@ class ExecuteUnit(implicit p: Parameters) extends DJModule {
   reqPipe.io.dcuID          := io.dcuID
 
 
-  io.req2Intf               <> fastPriorityArbDec(Seq(respPipe.io.req2Intf, reqPipe.io.req2Intf))
-  io.resp2Intf              <> fastPriorityArbDec(Seq(respPipe.io.resp2Intf, reqPipe.io.resp2Intf))
-  io.dbRCReq                <> fastPriorityArbDec(Seq(respPipe.io.dbRCReq, reqPipe.io.dbRCReq))
+  io.req2Intf               <> fastArb(Seq(respPipe.io.req2Intf, reqPipe.io.req2Intf))
+  io.resp2Intf              <> fastArb(Seq(respPipe.io.resp2Intf, reqPipe.io.resp2Intf))
+  io.dbRCReq                <> fastArb(Seq(respPipe.io.dbRCReq, reqPipe.io.dbRCReq))
 
 // --------------------------- Assertion ---------------------------//
   assert(io.req2Exu.bits.from       <= IncoID.max.U | !io.req2Exu.valid)

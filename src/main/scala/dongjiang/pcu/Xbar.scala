@@ -1,12 +1,10 @@
 package dongjiang.pcu
 
 import dongjiang._
-import dongjiang.utils.FastArb
+import dongjiang.utils.fastArb
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config._
-import dongjiang.utils.FastArb._
-import xs.utils.FastArbiter
 
 
 class Xbar()(implicit p: Parameters) extends DJModule {
@@ -65,7 +63,7 @@ class Xbar()(implicit p: Parameters) extends DJModule {
   def interConnect[T <: Bundle with HasToIncoID](in: Seq[DecoupledIO[T]], out: Seq[DecoupledIO[T]], q0: Int = 0, q0_pipe: Boolean = true, q1: Int = 0, q1_pipe: Boolean = true, q2: Int = 0, q2_pipe: Boolean = true): Unit = {
     val redirects = Seq.fill(in.size) { Seq.fill(out.size) { WireInit(0.U.asTypeOf(in(0))) } }
     in.zipWithIndex.foreach { case (m, i) => idSelDec2DecVec(Queue(m, entries = q0, pipe = q0_pipe), redirects(i)) }
-    out.zipWithIndex.foreach { case (m, i) => m <> Queue(fastArbDec(redirects.map { case a => Queue(a(i), entries = q1, pipe = q1_pipe) }), q2, pipe = q2_pipe) }
+    out.zipWithIndex.foreach { case (m, i) => m <> Queue(fastArb(redirects.map { case a => Queue(a(i), entries = q1, pipe = q1_pipe) }), q2, pipe = q2_pipe) }
   }
 
   // There is a lot of room for optimization of the connection
@@ -79,14 +77,14 @@ class Xbar()(implicit p: Parameters) extends DJModule {
 
   interConnect(in = io.resp2Exu.in,                 out = io.resp2Exu.out)
 
-  io.dbSigs.out(0).dbRCReq                          <> Queue(fastArbDec(io.dbSigs.in0), entries = 2) // Adding queue for timing considerations
+  io.dbSigs.out(0).dbRCReq                          <> Queue(fastArb(io.dbSigs.in0), entries = 2) // Adding queue for timing considerations
 
-  io.dbSigs.out(0).getDBID                          <> fastArbDec(io.dbSigs.in1.map(_.getDBID))
+  io.dbSigs.out(0).getDBID                          <> fastArb(io.dbSigs.in1.map(_.getDBID))
 
   interConnect(in = io.dbSigs.out.map(_.dbidResp),  out = io.dbSigs.in1.map(_.dbidResp))
 
   interConnect(in = io.dbSigs.out.map(_.dataFDB),   out = io.dbSigs.in1.map(_.dataFDB)) // Dont add queue for timing considerations because it has been add queue in DataBuffer
 
-  io.dbSigs.out(0).dataTDB                          <> fastArbDec(io.dbSigs.in1.map(_.dataTDB))
+  io.dbSigs.out(0).dataTDB                          <> fastArb(io.dbSigs.in1.map(_.dataTDB))
 
 }

@@ -11,7 +11,6 @@ import chisel3._
 import chisel3.util._
 import dongjiang.utils.StepRREncoder
 import org.chipsalliance.cde.config._
-import dongjiang.utils.FastArb._
 import xijiang.Node
 import xs.utils.perf.{DebugOptions, DebugOptionsKey, HasPerfLogging}
 

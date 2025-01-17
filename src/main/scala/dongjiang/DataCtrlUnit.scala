@@ -15,7 +15,7 @@ import org.chipsalliance.cde.config._
 import xs.utils.perf.{DebugOptions, DebugOptionsKey, HasPerfLogging}
 import xijiang.router.base.DeviceIcnBundle
 import xs.utils.sram._
-import dongjiang.utils.FastArb._
+import dongjiang.utils.fastArb
 import dongjiang.utils.StepRREncoder
 import xs.utils.debug.{DomainInfo, HardwareAssertion}
 
@@ -122,8 +122,8 @@ class DataCtrlUnit(nodes: Seq[Node])(implicit p: Parameters) extends DJRawModule
   io.icns.zip(txRspVec).foreach { case(a, b) => a.tx.resp.get <> b }
   io.icns.zip(txDatVec).foreach { case(a, b) => a.tx.data.get <> b }
 
-  rxReq <> Queue(fastArbDec(rxReqVec), 2) // Adding queues for timing considerations
-  rxDat <> fastArbDec(rxDatVec)
+  rxReq <> Queue(fastArb(rxReqVec.toSeq), 2) // Adding queues for timing considerations
+  rxDat <> fastArb(rxDatVec)
 
   val txDatDirVec = Wire(Vec(nrIcn, Bool()))
   val txRspDirVec = Wire(Vec(nrIcn, Bool()))

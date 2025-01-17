@@ -12,7 +12,6 @@ import chisel3.experimental.hierarchy.{instantiable, public}
 import chisel3.util._
 import org.chipsalliance.cde.config._
 import xs.utils.perf.{DebugOptions, DebugOptionsKey}
-import dongjiang.utils.FastArb._
 import xijiang.router.base.DeviceIcnBundle
 import zhujiang.HasZJParams
 
