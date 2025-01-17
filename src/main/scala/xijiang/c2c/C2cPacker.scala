@@ -97,6 +97,31 @@ class C2cBundle extends Bundle {
   }
 }
 
+class C2cInitializer extends Module {
+  val io = IO(new Bundle {
+    val link = new C2cBundle
+    val userTx = Input(UInt(C2cUtils.slotDataBits.W))
+    val userRx = Output(Valid(UInt(C2cUtils.slotDataBits.W)))
+  })
+  private val recvPayload = io.link.rx.bits.asTypeOf(new C2cPayload)
+  private val initFrame = io.link.rx.valid && Cat(recvPayload.slots.map(_.valid) ++ recvPayload.grants.map(_.valid)) === 0.U
+
+  private val initialized = RegInit(false.B)
+  private val ack = initFrame && recvPayload.slots(1).bits.data === 1.U
+  private val lb = initFrame && recvPayload.slots(1).bits.data === 0.U
+  private val loopBackPayload = WireInit(io.link.rx.bits.asTypeOf(new C2cPayload))
+
+  initialized := Mux(ack, true.B, initialized)
+  loopBackPayload.slots(0).bits.data := io.userTx
+  loopBackPayload.slots(1).bits.data := 1.U
+
+  io.link.tx.valid := lb | !initialized
+  io.link.tx.bits := Mux(lb, loopBackPayload.asUInt, 0.U)
+
+  io.userRx.valid := initialized
+  io.userRx.bits := RegEnable(recvPayload.slots.head.bits.data, ack)
+}
+
 class C2cPacker(implicit p:Parameters) extends ZJModule {
   val io = IO(new Bundle {
     val icn = new Bundle {
@@ -118,27 +143,17 @@ class C2cPacker(implicit p:Parameters) extends ZJModule {
   private val rxdat = Module(new RxQueue(UInt(dataFlitBits.W), C2cUtils.datId, zjParams.c2cParams.datRxSize))
   private val rxsnp = Module(new RxQueue(UInt(snoopFlitBits.W), C2cUtils.snpId, zjParams.c2cParams.snpRxSize))
 
-  private val userRxBits = Reg(UInt(C2cUtils.slotDataBits.W))
-  private val userRxFired = RegInit(false.B)
-  private val initTxFrame = WireInit(0.U.asTypeOf(new C2cPayload))
-  private val userTxFired = RegInit(false.B)
-  private val linkInitialized = RegInit(false.B)
-  private val userTxValid = !linkInitialized
+  private val initializer = Module(new C2cInitializer)
   private val rxPayload  = Wire(Valid(new C2cPayload))
-  private val rxPipe = Pipe(rxPayload)
-  private val receivingInitFrame = io.c2c.rx.valid && Cat(rxPipe.bits.slots.map(_.valid) ++ rxPipe.bits.grants.map(_.valid)) === 0.U
   rxPayload.valid := io.c2c.rx.valid
   rxPayload.bits := io.c2c.rx.bits.asTypeOf(new C2cPayload)
+  private val rxPipe = Pipe(rxPayload)
 
   //init link
-  initTxFrame.slots.head.bits := io.userTx.asTypeOf(initTxFrame.slots.head.bits)
-  userTxFired := Mux(userTxFired, userTxFired, io.c2c.tx.fire)
-  userRxFired := Mux(userRxFired, userRxFired, receivingInitFrame)
-  userRxBits := Mux(receivingInitFrame, rxPipe.bits.slots.head.bits.asUInt, userRxBits)
-  linkInitialized := userRxFired && userTxFired
-  io.userRx.valid := linkInitialized
-  io.userRx.bits := userRxBits
-
+  initializer.io.userTx := io.userTx
+  io.userRx := initializer.io.userRx
+  initializer.io.link.rx.valid := rxPipe.valid
+  initializer.io.link.rx.bits := rxPipe.bits.asUInt
   //tx connections
   txreq.io.enq <> io.icn.rx.req
   txrsp.io.enq <> io.icn.rx.rsp
@@ -152,9 +167,10 @@ class C2cPacker(implicit p:Parameters) extends ZJModule {
     txq.io.grant.bits := rxPipe.bits.grants(txq.chnId).bits
   }
 
-  io.c2c.tx.valid := userTxValid || dispatcher.io.tx.valid
-  io.c2c.tx.bits := Mux(userTxValid, initTxFrame.asUInt, dispatcher.io.tx.bits.asUInt)
-  dispatcher.io.tx.ready := linkInitialized && io.c2c.tx.ready
+  io.c2c.tx.valid := initializer.io.link.tx.valid || dispatcher.io.tx.valid
+  io.c2c.tx.bits := Mux(initializer.io.link.tx.valid, initializer.io.link.tx.bits, dispatcher.io.tx.bits.asUInt)
+  dispatcher.io.tx.ready := !initializer.io.link.tx.valid && io.c2c.tx.ready
+  initializer.io.link.tx.ready := io.c2c.tx.ready
 
   //rx connections
   private val rxqSeq = Seq(rxreq, rxrsp, rxdat, rxsnp)
