@@ -440,10 +440,10 @@ class DataCtrlUnit(nodes: Seq[Node])(implicit p: Parameters) extends DJRawModule
    */
   private val assertionNode = HardwareAssertion.placePipe(2, true)
   @public
-  val assertionOut = IO(Output(assertionNode.assertion.cloneType))
+  val assertionOut = IO(assertionNode.assertion.cloneType)
   @public
   val assertionInfo = DomainInfo(assertionNode.desc)
-  assertionOut := assertionNode.assertion
+  assertionOut <> assertionNode.assertion
 
 // -------------------------------------------------- Perf Counter ------------------------------------------------------ //
   // DCURBuf
