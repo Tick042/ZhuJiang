@@ -45,6 +45,9 @@ abstract class BaseTLULXbar(implicit p: Parameters) extends ZJModule {
         ain.bits := req.bits
         if(mstSize > 1) ain.bits.source := Cat(midx.U(extraIdBits.W), req.bits.source.asTypeOf(UInt(mstMaxIdBits.W)))
         aDnStrmRdyMat(midx)(sidx) := ain.ready && correctSlv
+        when(req.valid) {
+          assert(PopCount(aDnStrmRdyMat(midx)) <= 1.U)
+        }
       }
     }
     for(midx <- mstParams.indices) {
@@ -72,6 +75,9 @@ abstract class BaseTLULXbar(implicit p: Parameters) extends ZJModule {
         ain.bits := resp.bits
         ain.bits.source := resp.bits.source(mstParams(midx).sourceBits - 1, 0)
         dUpStrmRdyMat(sidx)(midx) := ain.ready && correctMst
+        when(resp.valid) {
+          assert(PopCount(dUpStrmRdyMat(sidx)) <= 1.U)
+        }
       }
     }
     for(sidx <- slvParams.indices) {

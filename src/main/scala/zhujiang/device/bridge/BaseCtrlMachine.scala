@@ -101,9 +101,6 @@ abstract class BaseCtrlMachine[
     when(icn.rx.resp.get.valid) {
       plmnu.compAck := icn.rx.resp.get.bits.Opcode === RspOpcode.CompAck || plu.compAck
     }
-    when(icn.rx.resp.get.valid || icn.rx.data.valid) {
-      assert(Cat(icn.rx.data.valid =/= icn.rx.resp.get.valid) =/= "b11".U)
-    }
   }
 
   private val icnDatOp = icn.rx.data.bits.Opcode
@@ -139,7 +136,7 @@ abstract class BaseCtrlMachine[
   icn.tx.resp.bits.TxnID := Mux(icnDBID && dwt, payload.info.returnTxnId.getOrElse(0.U), payload.info.txnId)
   icn.tx.resp.bits.SrcID := 0.U
   icn.tx.resp.bits.TgtID := Mux(icnDBID && dwt, payload.info.returnNid.getOrElse(0.U), payload.info.srcId)
-  icn.tx.resp.bits.Resp := Mux(icnDBID || icnComp || icnCompCmo, "b000".U, "b010".U)
+  icn.tx.resp.bits.Resp := Mux(icnComp, "b010".U, "b000".U)
   when(icn.tx.resp.fire) {
     plmnu.receiptResp := icn.tx.resp.bits.Opcode === RspOpcode.ReadReceipt || plu.receiptResp
     plmnu.dbidResp := icn.tx.resp.bits.Opcode === RspOpcode.DBIDResp || icn.tx.resp.bits.Opcode === RspOpcode.CompDBIDResp || plu.dbidResp

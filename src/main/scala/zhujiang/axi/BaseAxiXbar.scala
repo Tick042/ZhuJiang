@@ -63,6 +63,12 @@ abstract class BaseAxiXbar(mstParams:Seq[AxiParams]) extends Module {
         if(mstSize > 1) ain.bits.id := Cat(midx.U(extraIdBits.W), wreq.bits.id.asTypeOf(UInt(mstMaxIdBits.W)))
         awDnStrmRdyMat(midx)(sidx) := ain.ready && slvMatchersSeq(sidx)(wreq.bits.addr)
         wDnStrmRdyMat(midx)(sidx) := wQueue.io.enq.ready && recordQueue.io.deq.valid && recordQueue.io.deq.bits(midx)
+        when(wreq.valid) {
+          assert(PopCount(awDnStrmRdyMat(midx)) <= 1.U)
+        }
+        when(io.upstream(midx).w.valid) {
+          assert(PopCount(wDnStrmRdyMat(midx)) <= 1.U)
+        }
       }
     }
     for(midx <- mstParams.indices) {
@@ -90,6 +96,9 @@ abstract class BaseAxiXbar(mstParams:Seq[AxiParams]) extends Module {
         ain.bits := rreq.bits
         if(mstSize > 1) ain.bits.id := Cat(midx.U(extraIdBits.W), rreq.bits.id.asTypeOf(UInt(mstMaxIdBits.W)))
         arDnStrmRdyMat(midx)(sidx) := ain.ready && slvMatchersSeq(sidx)(rreq.bits.addr)
+        when(rreq.valid) {
+          assert(PopCount(arDnStrmRdyMat(midx)) <= 1.U)
+        }
       }
     }
     for(midx <- mstParams.indices) {
@@ -117,6 +126,9 @@ abstract class BaseAxiXbar(mstParams:Seq[AxiParams]) extends Module {
         ain.bits := wresp.bits
         ain.bits.id := wresp.bits.id(mstParams(midx).idBits - 1, 0)
         bUpStrmRdyMat(sidx)(midx) := ain.ready && correctMst
+        when(wresp.valid) {
+          assert(PopCount(bUpStrmRdyMat(sidx)) <= 1.U)
+        }
       }
     }
     for(sidx <- slvParams.indices) {
@@ -145,6 +157,9 @@ abstract class BaseAxiXbar(mstParams:Seq[AxiParams]) extends Module {
         ain.bits.data := rdata.bits.data(mstParams(midx).dataBits - 1, 0)
         ain.bits.id := rdata.bits.id(mstParams(midx).idBits - 1, 0)
         rUpStrmRdyMat(sidx)(midx) := ain.ready && correctMst
+        when(rdata.valid) {
+          assert(PopCount(rUpStrmRdyMat(sidx)) <= 1.U)
+        }
       }
     }
     for(sidx <- slvParams.indices) {

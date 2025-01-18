@@ -50,7 +50,7 @@ class C2cTxDispatcher(implicit p:Parameters) extends ZJModule {
   datPayload.valid := datPayload.bits.map(_.valid).reduce(_ | _)
 
   private val combPayload = Wire(Decoupled(flitAllSlotsType))
-  private val combArb = Module(new ResetRRArbiter(Bool(), 2))
+  private val combArb = Module(new ResetRRArbiter(Bool(), 2)) // Dont care about Data of this arbiter, use it arbitrary logics only.
   combArb.io.in.head.valid := reqSlots.head.valid
   combArb.io.in.last.valid := snpSlots.head.valid
   combArb.io.out.ready := combPayload.ready

@@ -80,7 +80,7 @@ package object bridge {
     val returnTxnId = if(mem) Some(UInt(12.W)) else None
     val dwt = if(mem) Some(Bool()) else None
     val readCnt = UInt(8.W)
-    val isSnooped = Bool()
+    val isSnooped = Bool() // This field indicates if this CM should be depended on by other CMs
   }
 
   abstract class IcnIoDevRsEntryCommon[
