@@ -99,6 +99,7 @@ class MSHRCtl()(implicit p: Parameters) extends DJModule with HasPerfLogging {
   // MSHR Table
   val mshrTableReg          = RegInit(VecInit(Seq.fill(djparam.nrMSHRSets) { VecInit(Seq.fill(djparam.nrMSHRWays) { mshrInit }) }))
   val mshrNSTable           = Wire(Vec(djparam.nrMSHRSets, Vec(djparam.nrMSHRWays, UInt(MSHRStateOH.width.W)))) // Next State Table
+  dontTouch(mshrNSTable)
   // Transfer Req From Node To MSHREntry
   val mshrAlloc_s0          = WireInit(0.U.asTypeOf(new MSHREntry()))
   // task s0
@@ -291,6 +292,8 @@ class MSHRCtl()(implicit p: Parameters) extends DJModule with HasPerfLogging {
           }.elsewhen((m.isBeSend | m.isWaitResp) & ns(BeSend)) {
             val lockSrcVec      = mVec.map { case a => a.mshrMes.selfLock & a.minDirSet(i.U) === m.minDirSet(i.U) }; assert(PopCount(lockSrcVec) <= 1.U, s"MSHR[${i}][${j}]")
             m.mshrMes.othLock   := lockSrcVec.reduce(_ | _)
+          }.otherwise {
+            m.mshrMes.othLock   := m.mshrMes.othLock
           }
           /*
            * Set selfLock
@@ -308,6 +311,8 @@ class MSHRCtl()(implicit p: Parameters) extends DJModule with HasPerfLogging {
                      (io.updMSHRVec(PipeID.REQ).fire  & io.updMSHRVec(PipeID.REQ).bits.unlock  & io.updMSHRVec(PipeID.REQ).bits.mshrMatch(i, j))) {
             m.mshrMes.selfLock  := false.B
             assert(m.mshrMes.selfLock, s"MSHR[${i}][${j}]")
+          }.otherwise {
+            m.mshrMes.selfLock  := m.mshrMes.selfLock
           }
       }
   }
@@ -350,12 +355,13 @@ class MSHRCtl()(implicit p: Parameters) extends DJModule with HasPerfLogging {
             val hit         = m.noWaitIntf
             val noResp      = m.respMes.noRespValid
             nextState       := Mux(hit, Mux(noResp, FREE, BESEND), WAITRESP)
-            assert(Mux(m.respMes.fwdState.valid, m.respMes.slvResp.valid, true.B))
+            assert(Mux(m.respMes.fwdState.valid, m.respMes.slvResp.valid, true.B), s"MSHR[${i}][${j}]")
           }.otherwise {
             nextState       := m.mshrMes.state
           }
           m.mshrMes.state   := nextState
-          assert(PopCount(m.mshrMes.state) === 1.U)
+          assert(PopCount(m.mshrMes.state) === 1.U, s"MSHR[${i}][${j}]")
+          assert(PopCount(nextState) === 1.U, s"MSHR[${i}][${j}]")
       }
   }
 
