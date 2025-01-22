@@ -9,8 +9,9 @@ import zhujiang.{ZJModule, ZJParametersKey}
 import zhujiang.chi.{Flit, NodeIdBundle}
 
 class SingleChannelTap[T <: Flit](gen: T, channel: String, node: Node)(implicit p: Parameters) extends ZJModule {
-
-  private val timerBits = p(ZJParametersKey).injectRsvdTimerShift
+  private val local = !node.csnNode
+  private val ringSize = if(local) p(ZJParametersKey).localRing.size else p(ZJParametersKey).csnRing.size
+  private val timerBits = log2Ceil(ringSize + 1)
   val io = IO(new Bundle {
     val in = Input(new ChannelBundle(gen))
     val out = Output(new ChannelBundle(gen))
@@ -19,7 +20,7 @@ class SingleChannelTap[T <: Flit](gen: T, channel: String, node: Node)(implicit 
     val matchTag = Input(UInt(niw.W))
     val tapIdx = Input(UInt(nodeAidBits.W))
   })
-  private val local = !node.csnNode
+
   private val c2c = node.nodeType == NodeType.C
   private val modName = if(local) {
     s"SingleChannelTapLocal$channel"

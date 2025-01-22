@@ -221,8 +221,7 @@ case class ZJParameters(
   dmaParams: DmaParams = DmaParams(),
   c2cParams: C2cParams = C2cParams(),
   tfbParams: Option[TrafficBoardParams] = Some(TrafficBoardParams()),
-  tfsParams: Option[TrafficSimParams] = None,
-  injectRsvdTimerShift: Int = 8
+  tfsParams: Option[TrafficSimParams] = None
 ) {
   lazy val cachelineBytes = 64
   lazy val requestAddrBits = 48
