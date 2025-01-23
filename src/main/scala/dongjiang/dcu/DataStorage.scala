@@ -28,6 +28,7 @@ class DataStorage(sets: Int)(implicit p: Parameters) extends DJModule {
   val split       = 4
   val ways        = maskBits/split
   val arrays      = Seq.fill(split) { Module(new SinglePortSramTemplate(UInt(8.W), sets, way = ways, setup = djparam.dcuSetup, latency = djparam.dcuLatency, extraHold = djparam.dcuExtraHold)) }
+  val writeQ      = Module(new Queue(new DsWriteBundle(indexBits), entries = 4, pipe = false, flow = false)) // Adding queue for timing considerations TODO: Finding a suitable entry number
 
 //// ----------------------- Reg/Wire declaration --------------------------//
   // s1
@@ -47,20 +48,22 @@ class DataStorage(sets: Int)(implicit p: Parameters) extends DJModule {
   /*
    * Read / Write Req SRAM
    */
-  wMaskVec.zipWithIndex.foreach { case(m, i) => m.zipWithIndex.foreach { case(m, j) => m := io.write.bits.mask(i * ways + j) } }
-  wDataVec.zipWithIndex.foreach { case(d, i) => d.zipWithIndex.foreach { case(d, j) => d := io.write.bits.beat((i * ways + j + 1) * 8 - 1, (i * ways + j) * 8) } }
+  writeQ.io.enq <> io.write
+
+  wMaskVec.zipWithIndex.foreach { case(m, i) => m.zipWithIndex.foreach { case(m, j) => m := writeQ.io.deq.bits.mask(i * ways + j) } }
+  wDataVec.zipWithIndex.foreach { case(d, i) => d.zipWithIndex.foreach { case(d, j) => d := writeQ.io.deq.bits.beat((i * ways + j + 1) * 8 - 1, (i * ways + j) * 8) } }
   arrays.zipWithIndex.foreach {
     case(a, i) =>
-      a.io.req.valid          := io.read.valid | (io.write.valid & wMaskVec(i).reduce(_ | _))
-      a.io.req.bits.write     := io.write.valid
-      a.io.req.bits.addr      := Mux(io.write.valid, io.write.bits.index, io.read.bits)
+      a.io.req.valid          := io.read.valid | (writeQ.io.deq.valid & wMaskVec(i).reduce(_ | _))
+      a.io.req.bits.write     := writeQ.io.deq.valid
+      a.io.req.bits.addr      := Mux(writeQ.io.deq.valid, writeQ.io.deq.bits.index, io.read.bits)
       a.io.req.bits.mask.get  := wMaskVec(i).asUInt
       a.io.req.bits.data.zip(wDataVec(i)).foreach { case (a, b) => a := b }
   }
 
 
-  io.write.ready  := arrays.map(_.io.req.ready).reduce(_ & _)
-  io.read.ready   := arrays.map(_.io.req.ready).reduce(_ & _) & !io.write.valid
+  writeQ.io.deq.ready := arrays.map(_.io.req.ready).reduce(_ & _)
+  io.read.ready       := arrays.map(_.io.req.ready).reduce(_ & _) & !writeQ.io.deq.valid
 
 // ---------------------------------------------------------------------------------------------------------------------- //
 // ------------------------------------------------- S2: Receive SRAM Resp ---------------------------------------------- //
