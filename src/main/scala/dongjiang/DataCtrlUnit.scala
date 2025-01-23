@@ -117,13 +117,13 @@ class DataCtrlUnit(nodes: Seq[Node])(implicit p: Parameters) extends DJRawModule
   val txRspVec  = Wire(Vec(nrIcn, new DecoupledIO(new RespFlit)))
   val txDatVec  = Wire(Vec(nrIcn, new DecoupledIO(new DataFlit)))
 
-  io.icns.zip(rxReqVec).foreach { case(a, b) => a.rx.req.get  <> b }
-  io.icns.zip(rxDatVec).foreach { case(a, b) => a.rx.data.get <> b }
-  io.icns.zip(txRspVec).foreach { case(a, b) => a.tx.resp.get <> b }
-  io.icns.zip(txDatVec).foreach { case(a, b) => a.tx.data.get <> b }
+  io.icns.zip(rxReqVec).foreach { case(a, b) => Queue(a.rx.req.get, 2)  <> b }
+  io.icns.zip(rxDatVec).foreach { case(a, b) => Queue(a.rx.data.get, 2) <> b }
+  io.icns.zip(txRspVec).foreach { case(a, b) => a.tx.resp.get <> Queue(b, 2) }
+  io.icns.zip(txDatVec).foreach { case(a, b) => a.tx.data.get <> Queue(b, 2) }
 
-  rxReq <> Queue(fastArb(rxReqVec.toSeq), 2) // Adding queues for timing considerations
-  rxDat <> fastArb(rxDatVec)
+  rxReq <> fastArb(rxReqVec) // Adding queues for timing considerations
+  rxDat <> fastArb(rxDatVec) // Adding queues for timing considerations
 
   val txDatDirVec = Wire(Vec(nrIcn, Bool()))
   val txRspDirVec = Wire(Vec(nrIcn, Bool()))
@@ -142,6 +142,9 @@ class DataCtrlUnit(nodes: Seq[Node])(implicit p: Parameters) extends DJRawModule
       t.bits      := txDat.bits
   }
   txDat.ready     := txDatVec(OHToUInt(txDatDirVec)).ready
+
+
+
   HardwareAssertion.withEn(PopCount(txDatDirVec) === 1.U, txDat.valid, cf"Illegal TxDat TgtID[${txDat.bits.TgtID}]", txDat.bits.TgtID)
 
   // txRsp
