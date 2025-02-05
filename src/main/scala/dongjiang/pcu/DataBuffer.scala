@@ -4,7 +4,7 @@ import dongjiang._
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config._
-import dongjiang.utils.StepRREncoder
+import dongjiang.utils.DecoupledQueue
 import xs.utils.perf.HasPerfLogging
 import xs.utils.sram.DualPortSramTemplate
 
@@ -57,8 +57,8 @@ class DataBuffer()(implicit p: Parameters) extends DJModule with HasPerfLogging 
   val beatEnrtys    = Module(new DualPortSramTemplate(new BeatBundle(), set = djparam.nrDatBuf * nrBeat, way = 1, shouldReset = false))
   val ctrlEntrys    = RegInit(VecInit(Seq.fill(djparam.nrDatBuf) { 0.U.asTypeOf(new DBEntry()) }))
   // beat queue
-  val beatInQ       = Module(new Queue(new BeatBundle with HasDBID with HasBeatBum, entries = 2, flow = false, pipe = false))
-  val beatOutQ      = Module(new Queue(new NodeFDBData(), entries = 2, flow = false, pipe = false))
+  val beatInQ       = Module(new DecoupledQueue(new BeatBundle with HasDBID with HasBeatBum))
+  val beatOutQ      = Module(new DecoupledQueue(new NodeFDBData()))
   // apu
   val apuEntryInit  = WireInit(0.U.asTypeOf(new APUEntry())); apuEntryInit.op := AtomicOp.NONE.U
   val apuEntrys     = RegInit(VecInit(Seq.fill(djparam.nrAPU) { apuEntryInit }))
@@ -67,7 +67,7 @@ class DataBuffer()(implicit p: Parameters) extends DJModule with HasPerfLogging 
   val rBeatCanGo    = WireInit(false.B); dontTouch(rBeatCanGo)
   val readingReg    = RegInit(false.B)
   // Ensure that the order of dataFDB Out is equal to the order of dbRCReq In
-  val readIdQ       = Module(new Queue(UInt(dbIdBits.W), entries = 4, flow = false, pipe = false))
+  val readIdQ       = Module(new DecoupledQueue(UInt(dbIdBits.W)))
 
 // ---------------------------------------------------------------------------------------------------------------------- //
 // -------------------------------------------------- GetDBID & DBIDResp ------------------------------------------------ //

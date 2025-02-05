@@ -8,6 +8,7 @@ class DecoupledQueue[T <: Data](gen:T) extends Module {
   val io = IO(new Bundle {
     val enq = Flipped(Decoupled(gen))
     val deq = Decoupled(gen)
+    val count = Output(UInt(2.W))
   })
 
   val q = Module(new Queue(gen, entries = 2, flow = false, pipe = false))
@@ -34,20 +35,33 @@ class DecoupledQueue[T <: Data](gen:T) extends Module {
   io.deq <> q.io.deq
   io.enq.ready := enqReadyReg
   io.deq.valid := deqValidReg
+  io.count := q.io.count
 }
 
 
 // For timing
 object fastDecoupledQueue {
-  def apply[T <: Bundle](in: DecoupledIO[T], out: DecoupledIO[T]): Unit = {
+  def apply[T <: Data](in: DecoupledIO[T], out: DecoupledIO[T]): Unit = {
     val q = Module(new DecoupledQueue(chiselTypeOf(in.bits)))
     q.io.enq <> in
     q.io.deq <> out
   }
 
-  def apply[T <: Bundle](in: DecoupledIO[T]): DecoupledIO[T] = {
+  def apply[T <: Data](in: DecoupledIO[T]): DecoupledIO[T] = {
     val q = Module(new DecoupledQueue(chiselTypeOf(in.bits)))
     q.io.enq <> in
     q.io.deq
+  }
+
+  def apply[T <: Data](in: DecoupledIO[T], enable: Boolean): DecoupledIO[T] = {
+    val out = WireInit(0.U.asTypeOf(in))
+    if(enable) {
+      val q = Module(new DecoupledQueue(chiselTypeOf(in.bits)))
+      q.io.enq <> in
+      out <> q.io.deq
+    } else {
+      out <> in
+    }
+    out
   }
 }

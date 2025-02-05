@@ -17,6 +17,7 @@ import xijiang.router.base.DeviceIcnBundle
 import xs.utils.sram._
 import dongjiang.utils.fastArb
 import dongjiang.utils.StepRREncoder
+import dongjiang.utils.fastDecoupledQueue
 import xs.utils.debug.{DomainInfo, HardwareAssertion}
 
 /*
@@ -117,10 +118,10 @@ class DataCtrlUnit(nodes: Seq[Node])(implicit p: Parameters) extends DJRawModule
   val txRspVec  = Wire(Vec(nrIcn, new DecoupledIO(new RespFlit)))
   val txDatVec  = Wire(Vec(nrIcn, new DecoupledIO(new DataFlit)))
 
-  io.icns.zip(rxReqVec).foreach { case(a, b) => Queue(a.rx.req.get, 2)  <> b }
-  io.icns.zip(rxDatVec).foreach { case(a, b) => Queue(a.rx.data.get, 2) <> b }
-  io.icns.zip(txRspVec).foreach { case(a, b) => a.tx.resp.get <> Queue(b, 2) }
-  io.icns.zip(txDatVec).foreach { case(a, b) => a.tx.data.get <> Queue(b, 2) }
+  io.icns.zip(rxReqVec).foreach { case(a, b) => fastDecoupledQueue(a.rx.req.get,  b) }
+  io.icns.zip(rxDatVec).foreach { case(a, b) => fastDecoupledQueue(a.rx.data.get, b) }
+  io.icns.zip(txRspVec).foreach { case(a, b) => fastDecoupledQueue(b, a.tx.resp.get) }
+  io.icns.zip(txDatVec).foreach { case(a, b) => fastDecoupledQueue(b, a.tx.data.get) }
 
   rxReq <> fastArb(rxReqVec) // Adding queues for timing considerations
   rxDat <> fastArb(rxDatVec) // Adding queues for timing considerations

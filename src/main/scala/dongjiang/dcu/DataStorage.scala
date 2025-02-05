@@ -1,7 +1,7 @@
 package dongjiang.dcu
 
 import dongjiang._
-import dongjiang.chi._
+import dongjiang.utils.DecoupledQueue
 import chisel3.{util, _}
 import chisel3.util._
 import org.chipsalliance.cde.config._
@@ -28,7 +28,7 @@ class DataStorage(sets: Int)(implicit p: Parameters) extends DJModule {
   val split       = 4
   val ways        = maskBits/split
   val arrays      = Seq.fill(split) { Module(new SinglePortSramTemplate(UInt(8.W), sets, way = ways, setup = djparam.dcuSetup, latency = djparam.dcuLatency, extraHold = djparam.dcuExtraHold)) }
-  val writeQ      = Module(new Queue(new DsWriteBundle(indexBits), entries = 4, pipe = false, flow = false)) // Adding queue for timing considerations TODO: Finding a suitable entry number
+  val writeQ      = Module(new DecoupledQueue(new DsWriteBundle(indexBits))) // Adding queue for timing considerations
 
 //// ----------------------- Reg/Wire declaration --------------------------//
   // s1

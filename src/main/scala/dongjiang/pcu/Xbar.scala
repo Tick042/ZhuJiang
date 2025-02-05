@@ -2,6 +2,7 @@ package dongjiang.pcu
 
 import dongjiang._
 import dongjiang.utils.fastArb
+import dongjiang.utils.fastDecoupledQueue
 import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config._
@@ -60,24 +61,24 @@ class Xbar()(implicit p: Parameters) extends DJModule {
 
 
   // in ---> [queue0] --->  [redirects] ---> [queue1] ---> [arbiter] ---> [queue2] ---> out
-  def interConnect[T <: Bundle with HasToIncoID](in: Seq[DecoupledIO[T]], out: Seq[DecoupledIO[T]], q0: Int = 0, q0_pipe: Boolean = true, q1: Int = 0, q1_pipe: Boolean = true, q2: Int = 0, q2_pipe: Boolean = true): Unit = {
+  def interConnect[T <: Bundle with HasToIncoID](in: Seq[DecoupledIO[T]], out: Seq[DecoupledIO[T]], q0: Boolean=false, q1: Boolean=false, q2: Boolean=false): Unit = {
     val redirects = Seq.fill(in.size) { Seq.fill(out.size) { WireInit(0.U.asTypeOf(in(0))) } }
-    in.zipWithIndex.foreach { case (m, i) => idSelDec2DecVec(Queue(m, entries = q0, pipe = q0_pipe), redirects(i)) }
-    out.zipWithIndex.foreach { case (m, i) => m <> Queue(fastArb(redirects.map { case a => Queue(a(i), entries = q1, pipe = q1_pipe) }), q2, pipe = q2_pipe) }
+    in.zipWithIndex.foreach { case (m, i) => idSelDec2DecVec(fastDecoupledQueue(m, q0), redirects(i)) }
+    out.zipWithIndex.foreach { case (m, i) => m <> fastDecoupledQueue(fastArb(redirects.map { case a => fastDecoupledQueue(a(i), q1) }), q2) }
   }
 
   // There is a lot of room for optimization of the connection
-  interConnect(in = io.req2Exu.in,                  out = io.req2Exu.out, q0 = 2, q0_pipe = false) // Adding queue for timing considerations
+  interConnect(in = io.req2Exu.in,                  out = io.req2Exu.out, q0 = true) // Adding queue for timing considerations
 
   interConnect(in = io.reqAck2Intf.in,              out = io.reqAck2Intf.out)
 
-  interConnect(in = io.resp2Intf.in,                out = io.resp2Intf.out, q0 = 2, q0_pipe = false) // Adding queue for timing considerations
+  interConnect(in = io.resp2Intf.in,                out = io.resp2Intf.out, q0 = true) // Adding queue for timing considerations
 
-  interConnect(in = io.req2Intf.in,                 out = io.req2Intf.out, q0 = 2, q0_pipe = false) // Adding queue for timing considerations
+  interConnect(in = io.req2Intf.in,                 out = io.req2Intf.out, q0 = true) // Adding queue for timing considerations
 
   interConnect(in = io.resp2Exu.in,                 out = io.resp2Exu.out)
 
-  io.dbSigs.out(0).dbRCReq                          <> Queue(fastArb(io.dbSigs.in0), entries = 2) // Adding queue for timing considerations
+  io.dbSigs.out(0).dbRCReq                          <> fastDecoupledQueue(fastArb(io.dbSigs.in0)) // Adding queue for timing considerations
 
   io.dbSigs.out(0).getDBID                          <> fastArb(io.dbSigs.in1.map(_.getDBID))
 

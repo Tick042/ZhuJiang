@@ -9,6 +9,7 @@ import org.chipsalliance.cde.config._
 import xs.utils.sram.{SinglePortSramTemplate, DualPortSramTemplate}
 import chisel3.util.random.LFSR
 import freechips.rocketchip.util.ReplacementPolicy
+import dongjiang.utils.{fastDecoupledQueue, DecoupledQueue}
 
 
 class DirCtrlBundle(implicit p: Parameters) extends DJBundle with HasMHSRIndex with HasPipeID
@@ -60,9 +61,7 @@ class DirectoryBase(
 
   val rCtrlPipe       = Module(new Pipe(new DirCtrlBundle(), latency = setup + latency - 1))
 
-  val writeQ          = Module(new Queue(new DirWriteBaseBundle(ways, nrMetas, replWayBits), entries = 4, pipe = false, flow = false)) // Adding queue for timing considerations TODO: Finding a suitable entry number
-
-  val updReplQOpt     = if(!useRepl) None else Some(Module(new Queue(new Bundle { val set = UInt(setBits.W); val way = UInt(wayBits.W); val replMes = UInt(repl.nBits.W) }, entries = 2, pipe = false, flow = false)))
+  val updReplQOpt     = if(!useRepl) None else Some(Module(new DecoupledQueue(new Bundle { val set = UInt(setBits.W); val way = UInt(wayBits.W); val replMes = UInt(repl.nBits.W) })))
 
 // ----------------------- Reg/Wire declaration --------------------------//
   val resetDone       = RegInit(false.B)
@@ -121,10 +120,9 @@ class DirectoryBase(
 // -------------------------------------------------- S1: Read / Write SRAM --------------------------------------------- //
 // ---------------------------------------------------------------------------------------------------------------------- //
   /*
-   * Receive write input
+   * Receive directory input
    */
-  writeQ.io.enq <> io.dirWrite
-  dirWrite      <> writeQ.io.deq
+  dirWrite      <> fastDecoupledQueue(io.dirWrite)
   dirRead       <> io.dirRead
 
   /*
