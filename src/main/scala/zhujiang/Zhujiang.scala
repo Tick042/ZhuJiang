@@ -126,6 +126,8 @@ class Zhujiang(isTop:Boolean = false)(implicit p: Parameters) extends ZJModule w
     pcuDevSeq(i).reset := placeResetGen(s"pcu_$bankId", pcuIcnSeq(i))
     pcuDevSeq(i).clock := clock
     pcuDevSeq(i).suggestName(s"pcu_$bankId")
+    HardwareAssertion.fromDomain(pcuDevSeq(i).assertionOut, pcuDevSeq(i).assertionInfo, level = 0, s"pcu $bankId")
+    HardwareAssertion.placePipe(Int.MaxValue-1)
   }
 
   require(!localRing.icnSns.get.forall(_.node.mainMemory))

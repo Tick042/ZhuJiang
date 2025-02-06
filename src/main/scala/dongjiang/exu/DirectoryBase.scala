@@ -10,6 +10,7 @@ import xs.utils.sram.{SinglePortSramTemplate, DualPortSramTemplate}
 import chisel3.util.random.LFSR
 import freechips.rocketchip.util.ReplacementPolicy
 import dongjiang.utils.{fastDecoupledQueue, DecoupledQueue}
+import xs.utils.debug.{DomainInfo, HardwareAssertion}
 
 
 class DirCtrlBundle(implicit p: Parameters) extends DJBundle with HasMHSRIndex with HasPipeID
@@ -135,9 +136,8 @@ class DirectoryBase(
     rTag_s1 := dirRead.bits.sfTag;  rSet_s1 := dirRead.bits.sfSet;  rDirBank_s1 := dirRead.bits.dirBank
     wTag_s1 := dirWrite.bits.sfTag; wSet_s1 := dirWrite.bits.sfSet; wDirBank_s1 := dirWrite.bits.dirBank
   }
-  assert(Mux(dirRead.valid, io.dirBank === rDirBank_s1, true.B))
-  assert(Mux(dirWrite.valid, io.dirBank === wDirBank_s1, true.B))
-
+  HardwareAssertion.withEn(io.dirBank === rDirBank_s1, dirRead.valid)
+  HardwareAssertion.withEn(io.dirBank === wDirBank_s1, dirWrite.valid)
 
   /*
    * Set SramCtrl Value
@@ -171,13 +171,13 @@ class DirectoryBase(
       m.io.req.bits.data.foreach(_.metaVec  := dirWrite.bits.metaVec)
       m.io.req.bits.mask.get                := dirWrite.bits.wayOH >> (i * ways/nrWayBank).U
   }
-  assert(Mux(dirWrite.fire, PopCount(metaArrays.map(_.io.req.fire)) === 1.U, true.B))
+  HardwareAssertion.withEn(PopCount(metaArrays.map(_.io.req.fire)) === 1.U, dirWrite.fire)
 
   if (useRepl) {
     replArrayOpt.get.io.rreq.valid  := dirRead.fire
     replArrayOpt.get.io.rreq.bits   := rSet_s1
-    assert(Mux(dirRead.fire, replArrayOpt.get.io.rreq.fire, true.B))
-    assert(Mux(replArrayOpt.get.io.rreq.fire, dirRead.fire, true.B))
+    HardwareAssertion.withEn(replArrayOpt.get.io.rreq.fire, dirRead.fire)
+    HardwareAssertion.withEn(dirRead.fire, replArrayOpt.get.io.rreq.fire)
   }
 
 
@@ -211,15 +211,15 @@ class DirectoryBase(
           metaResp_s2((i*(ways/nrWayBank))+j) := Mux(valid_s2, d, 0.U.asTypeOf(d))
       }
   }
-  assert(Mux(RegNext(rCtrlPipe.io.deq.valid), metaArrays.map(_.io.resp.valid).reduce(_ & _), true.B))
-  assert(Mux(metaArrays.map(_.io.resp.valid).reduce(_ & _), RegNext(rCtrlPipe.io.deq.valid), true.B))
+  HardwareAssertion.withEn(metaArrays.map(_.io.resp.valid).reduce(_ & _), RegNext(rCtrlPipe.io.deq.valid))
+  HardwareAssertion.withEn(RegNext(rCtrlPipe.io.deq.valid), metaArrays.map(_.io.resp.valid).reduce(_ & _))
 
   /*
    * Receive Repl SRAM resp
    */
   if (useRepl) {
     replResp_s2   := replArrayOpt.get.io.rresp.bits(0)
-    assert(!(valid_s2 ^ replArrayOpt.get.io.rresp.valid))
+    HardwareAssertion(!(valid_s2 ^ replArrayOpt.get.io.rresp.valid))
   }
 
   /*
@@ -232,7 +232,7 @@ class DirectoryBase(
       else                  a.bits := parseSFAddr(b.bits)._1
   }
   addr_s2         := io.mshrResp.addrs(rCtrl_s2_g.mshrWay).bits
-  assert(Mux(valid_s2, io.mshrResp.addrs(rCtrl_s2_g.mshrWay).valid, true.B))
+  HardwareAssertion.withEn(io.mshrResp.addrs(rCtrl_s2_g.mshrWay).valid, valid_s2)
 
 
 // ---------------------------------------------------------------------------------------------------------------------- //
@@ -260,7 +260,7 @@ class DirectoryBase(
   val hitMetaVec  = metaResp_s3_g(OHToUInt(hitWayVec)).metaVec
   val hit         = hitWayVec.asUInt.orR
   hitWayVec       := tagHitVec.zip(stateHitVec).map{ case(t, s) => t & s }
-  assert(PopCount(hitWayVec) <= 1.U)
+  HardwareAssertion(PopCount(hitWayVec) <= 1.U)
 
 
   /*
@@ -318,7 +318,7 @@ class DirectoryBase(
     updReplQOpt.get.io.enq.bits.replMes := replResp_s3_g
     updReplQOpt.get.io.deq.ready        := replArrayOpt.get.io.wreq.ready
     updReplByHit                        := updReplQOpt.get.io.deq.valid
-    assert(Mux(updReplQOpt.get.io.enq.valid, updReplQOpt.get.io.enq.ready, true.B))
+    HardwareAssertion.withEn(updReplQOpt.get.io.enq.ready, updReplQOpt.get.io.enq.valid)
   }
 
 
@@ -335,15 +335,17 @@ class DirectoryBase(
       replArrayOpt.get.io.wreq.bits.data.foreach(_ := Mux(updReplByHit,
                                                           repl.get_next_state(updReplQOpt.get.io.deq.bits.replMes, updReplQOpt.get.io.deq.bits.way),
                                                           repl.get_next_state(dirWrite.bits.replMes,               OHToUInt(dirWrite.bits.wayOH))))
-      assert(Mux(updReplQOpt.get.io.deq.fire,   replArrayOpt.get.io.wreq.fire,                true.B))
-      assert(Mux(dirWrite.fire,                 replArrayOpt.get.io.wreq.fire,                true.B))
-      assert(Mux(replArrayOpt.get.io.wreq.fire, dirWrite.fire | updReplQOpt.get.io.deq.fire,  true.B))
+      HardwareAssertion.withEn(replArrayOpt.get.io.wreq.fire, updReplQOpt.get.io.deq.fire)
+      HardwareAssertion.withEn(replArrayOpt.get.io.wreq.fire, dirWrite.fire)
+      HardwareAssertion.withEn(dirWrite.fire | updReplQOpt.get.io.deq.fire, replArrayOpt.get.io.wreq.fire)
     } else if(replPolicy == "random") {
       // nothing to do
-    } else {
-      assert(false.B, "Dont support replacementPolicy except plru or random")
     }
+    require(replPolicy == "plru" | replPolicy == "random", "Dont support replacementPolicy except plru or random")
 
-
+  /*
+   * Hardware Assertion Place Pipe
+   */
+  HardwareAssertion.placePipe(1)
 
 }

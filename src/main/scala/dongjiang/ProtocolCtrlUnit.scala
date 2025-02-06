@@ -14,7 +14,7 @@ import chisel3.util._
 import org.chipsalliance.cde.config._
 import xs.utils.perf.{DebugOptions, DebugOptionsKey}
 import xijiang.router.base.DeviceIcnBundle
-import zhujiang.HasZJParams
+import xs.utils.debug.{DomainInfo, HardwareAssertion}
 
 
 /*
@@ -177,8 +177,8 @@ class ProtocolCtrlUnit(localHf: Node, csnRf: Option[Node] = None, csnHf: Option[
   localSnMaster.io.chi.rx.resp.get.bits   := rxResp.bits
   localRnSlave.io.chi.rx.resp.get.bits    := rxResp.bits
   rxResp.ready                            := fromSnNode(rxResp.bits.SrcID) | localRnSlave.io.chi.rx.resp.get.ready
-  // assert
-  assert(Mux(rxResp.valid & fromSnNode(rxResp.bits.asTypeOf(new RespFlit()).SrcID), localSnMaster.io.chi.rx.resp.get.ready, true.B))
+  // HardwareAssertion
+  HardwareAssertion.withEn(localSnMaster.io.chi.rx.resp.get.ready, rxResp.valid & fromSnNode(rxResp.bits.asTypeOf(new RespFlit()).SrcID))
 
 
 
@@ -189,9 +189,9 @@ class ProtocolCtrlUnit(localHf: Node, csnRf: Option[Node] = None, csnHf: Option[
   localRnSlave.io.chi.rx.data.get.valid   := rxData.valid & fromRnNode(rxData.bits.SrcID)
   localSnMaster.io.chi.rx.data.get.bits   := rxData.bits
   localRnSlave.io.chi.rx.data.get.bits    := rxData.bits
-  // assert
-  assert(Mux(rxData.fire, (localSnMaster.io.chi.rx.data.get.ready & fromSnNode(rxData.bits.SrcID)) |
-                          (localRnSlave.io.chi.rx.data.get.ready & fromRnNode(rxData.bits.SrcID)), true.B))
+  // HardwareAssertion
+ HardwareAssertion.withEn((localSnMaster.io.chi.rx.data.get.ready & fromSnNode(rxData.bits.SrcID)) |
+                           (localRnSlave.io.chi.rx.data.get.ready & fromRnNode(rxData.bits.SrcID)), rxData.fire)
 
   // tx req
   io.toLocal.tx.req.get                   <> fastDecoupledQueue(localSnMaster.io.chi.tx.req.get) // Adding queues for timing considerations
@@ -300,4 +300,14 @@ class ProtocolCtrlUnit(localHf: Node, csnRf: Option[Node] = None, csnHf: Option[
   txData.bits.Data                  := databuffer.io.dataFDB.bits.data
   txData.bits.DataID                := databuffer.io.dataFDB.bits.dataID
   txData.bits.BE                    := databuffer.io.dataFDB.bits.mask
+
+  /*
+   * Hardware Assertion Node And IO
+   */
+  private val assertionNode = HardwareAssertion.placePipe(Int.MaxValue-1, true)
+  @public
+  val assertionOut = IO(assertionNode.assertion.cloneType)
+  @public
+  val assertionInfo = DomainInfo(assertionNode.desc)
+  assertionOut <> assertionNode.assertion
 }
