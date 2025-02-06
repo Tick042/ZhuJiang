@@ -6,7 +6,7 @@ import chisel3.{util, _}
 import chisel3.util._
 import org.chipsalliance.cde.config._
 import xs.utils.sram.SinglePortSramTemplate
-
+import xs.utils.debug.{DomainInfo, HardwareAssertion}
 
 class DsWriteBundle(indexBits: Int)(implicit p: Parameters) extends DJBundle {
   val index = UInt(indexBits.W)
@@ -75,7 +75,8 @@ class DataStorage(sets: Int)(implicit p: Parameters) extends DJModule {
   valid_s2      := arrays(0).io.resp.valid
   resp_s2       := Cat(arrays.map { case a => Cat(a.io.resp.bits.data.reverse) }.reverse)
 
-  assert(Mux(arrays.map(_.io.resp.valid).reduce(_ | _), arrays.map(_.io.resp.valid).reduce(_ & _), true.B))
+  HardwareAssertion.withEn(arrays.map(_.io.resp.valid).reduce(_ & _), arrays.map(_.io.resp.valid).reduce(_ | _), cf"")
+  HardwareAssertion.placePipe(1)
 
 // ---------------------------------------------------------------------------------------------------------------------- //
 // ---------------------------------------------------- S3: Output Resp  ------------------------------------------------ //

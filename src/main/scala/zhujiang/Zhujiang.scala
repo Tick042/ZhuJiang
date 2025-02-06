@@ -149,9 +149,10 @@ class Zhujiang(isTop:Boolean = false)(implicit p: Parameters) extends ZJModule w
     dcuDevSeq(i).clock := clock
     dcuDevSeq(i).suggestName(s"dcu_$bankId")
     HardwareAssertion.fromDomain(dcuDevSeq(i).assertionOut, dcuDevSeq(i).assertionInfo, level = 0, s"dcu $bankId")
-    HardwareAssertion.placePipe(1)
+    HardwareAssertion.placePipe(Int.MaxValue-1)
   }
-  private val assertionNode = HardwareAssertion.placePipe(Int.MaxValue)
+
+  private val assertionNode = HardwareAssertion.placePipe(Int.MaxValue, true)
   val io = IO(new Bundle {
     val chip = Input(UInt(nodeAidBits.W))
     val onReset = Output(Bool())

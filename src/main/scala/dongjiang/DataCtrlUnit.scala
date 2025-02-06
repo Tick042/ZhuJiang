@@ -133,8 +133,8 @@ class DataCtrlUnit(nodes: Seq[Node])(implicit p: Parameters) extends DJRawModule
 
   // rxReq
   val beatOff     = parseDCUAddr(rxReq.bits.Addr)._1
-  HardwareAssertion.withEn(!beatOff, rxReq.bits.Size === chiFullSize.U & rxReq.valid, cf"", rxReq.bits.Addr)
-  HardwareAssertion.withEn(rxReq.bits.Size === chiFullSize.U, isReplace(rxReq.bits.Opcode) & rxReq.valid, cf"", rxReq.bits.Size)
+  HardwareAssertion.withEn(!beatOff, rxReq.bits.Size === chiFullSize.U & rxReq.valid, rxReq.bits.Addr)
+  HardwareAssertion.withEn(rxReq.bits.Size === chiFullSize.U, isReplace(rxReq.bits.Opcode) & rxReq.valid, rxReq.bits.Size)
 
   // txDat
   txDatVec.zipWithIndex.foreach {
@@ -225,8 +225,8 @@ class DataCtrlUnit(nodes: Seq[Node])(implicit p: Parameters) extends DJRawModule
   val sramRead              = willSendRVec.reduce(_ | _)
   val sramRepl              = !sramRead & willSendReplVec.reduce(_ | _)
 
-  val sramRFire             = dsVec.map(_.map(_.io.read.fire).reduce(_ | _)).reduce(_ | _); HardwareAssertion(PopCount(dsVec.map(_.map(_.io.read.fire).reduce(_ | _))) <= 1.U, cf"")
-  val sramWFire             = dsVec.map(_.map(_.io.write.fire).reduce(_ | _)).reduce(_ | _); HardwareAssertion(PopCount(dsVec.map(_.map(_.io.write.fire).reduce(_ | _))) <= 1.U, cf"")
+  val sramRFire             = dsVec.map(_.map(_.io.read.fire).reduce(_ | _)).reduce(_ | _); HardwareAssertion(PopCount(dsVec.map(_.map(_.io.read.fire).reduce(_ | _))) <= 1.U)
+  val sramWFire             = dsVec.map(_.map(_.io.write.fire).reduce(_ | _)).reduce(_ | _); HardwareAssertion(PopCount(dsVec.map(_.map(_.io.write.fire).reduce(_ | _))) <= 1.U)
 
   val sramWID               = StepRREncoder(willSendWVec, sramWFire)
   val sramRID               = StepRREncoder(willSendRVec, sramRFire)
@@ -253,7 +253,7 @@ class DataCtrlUnit(nodes: Seq[Node])(implicit p: Parameters) extends DJRawModule
   /*
     * Get Read CHI Resp
     */
-  rRespQ.io.enq.valid         := sramRFire; HardwareAssertion.withEn(rRespQ.io.enq.ready, sramRFire, cf"")
+  rRespQ.io.enq.valid         := sramRFire; HardwareAssertion.withEn(rRespQ.io.enq.ready, sramRFire)
   rRespQ.io.enq.bits          := DontCare
   rRespQ.io.enq.bits.Opcode   := Mux(sramRead, rBufRegVec(sramRID).respOpcode,  NonCopyBackWriteData)
   rRespQ.io.enq.bits.TgtID    := Mux(sramRead, rBufRegVec(sramRID).returnNID,   ddrcNodeId.U)
@@ -389,9 +389,9 @@ class DataCtrlUnit(nodes: Seq[Node])(implicit p: Parameters) extends DJRawModule
   rDataQ.io.enq.bits.beats  := dsRespVec(dsRespID).map(_.bits)
   rDataQ.io.enq.bits.beatOH := dsRespOH
   // HardwareAssertion
-  HardwareAssertion(Mux(dsRespIdPipe.io.deq.valid, PopCount(dsRespVec.map(_.map(_.valid).reduce(_ | _))) === 1.U, PopCount(dsRespVec.map(_.map(_.valid).reduce(_ | _))) === 0.U), cf"")
-  HardwareAssertion.withEn(OHToUInt(dsRespVec.map(_.map(_.valid).reduce(_ | _))) === dsRespID, dsRespIdPipe.io.deq.valid, cf"")
-  HardwareAssertion.withEn(Cat(dsRespVec(dsRespID).map(_.valid).reverse) === dsRespOH, dsRespIdPipe.io.deq.valid, cf"")
+  HardwareAssertion(Mux(dsRespIdPipe.io.deq.valid, PopCount(dsRespVec.map(_.map(_.valid).reduce(_ | _))) === 1.U, PopCount(dsRespVec.map(_.map(_.valid).reduce(_ | _))) === 0.U))
+  HardwareAssertion.withEn(OHToUInt(dsRespVec.map(_.map(_.valid).reduce(_ | _))) === dsRespID, dsRespIdPipe.io.deq.valid)
+  HardwareAssertion.withEn(Cat(dsRespVec(dsRespID).map(_.valid).reverse) === dsRespOH, dsRespIdPipe.io.deq.valid)
 
   /*
     * Send Resp To CHI RxDat
@@ -419,30 +419,16 @@ class DataCtrlUnit(nodes: Seq[Node])(implicit p: Parameters) extends DJRawModule
   HardwareAssertion.withEn(rxReq.bits.Opcode === ReadNoSnp | rxReq.bits.Opcode === WriteNoSnpFull | rxReq.bits.Opcode === WriteNoSnpPtl | rxReq.bits.Opcode === Replace |  rxReq.bits.Opcode === FlushDCU,
                            rxReq.valid, cf"Illegal DCU RxReq Opcode[${rxReq.bits.Opcode}]", rxReq.bits.Opcode)
 
-  /*
-   * Read Buffer Timeout Check
-   */
-  val rCntReg = RegInit(VecInit(Seq.fill(djparam.nrDCURBuf) { 0.U(64.W) }))
-  rCntReg.zip(rBufRegVec).foreach { case (c, r) => c := Mux(r.state === DCURState.Free, 0.U, c + 1.U) }
-  // EDA
-  rCntReg.zipWithIndex.foreach { case (c, i) => assert(c < TIMEOUT_DCU_R.U, "DCU ReadBuffer[0x%x] STATE[0x%x] TIMEOUT", i.U, rBufRegVec(i).state) }
-  // Hareware
-  rCntReg.zipWithIndex.foreach { case (c, i) => HardwareAssertion.checkTimeout(c, cf"DCU ReadBuffer[${i}] STATE[${rBufRegVec(i).state}] TIMEOUT", rBufRegVec(i).state) }
+  // Read Buffer Timeout Check
+  rBufRegVec.zipWithIndex.foreach { { case (r, i) => HardwareAssertion.checkTimeout(r.state === DCURState.Free, TIMEOUT_DCU_R, cf"DCU ReadBuffer[${i}] STATE[${r.state}] TIMEOUT", r.state) } }
 
-  /*
-   * Write Buffer Timeout Check
-   */
-  val wCntReg = RegInit(VecInit(Seq.fill(djparam.nrDCUWBuf) { 0.U(64.W) }))
-  wCntReg.zip(wBufRegVec).foreach { case (c, w) => c := Mux(w.state === DCUWState.Free, 0.U, c + 1.U) }
-  // EDA
-  wCntReg.zipWithIndex.foreach { case (c, i) => assert(c < TIMEOUT_DCU_W.U, "DCU WriteBuffer[0x%x] STATE[0x%x] TIMEOUT", i.U, wBufRegVec(i).state) }
-  // Hareware
-  wCntReg.zipWithIndex.foreach { case (c, i) => HardwareAssertion.checkTimeout(c, cf"DCU WriteBuffer[${i}] STATE[${wBufRegVec(i).state}] TIMEOUT", wBufRegVec(i).state) }
+  // Write Buffer Timeout Check
+  wBufRegVec.zipWithIndex.foreach { { case (w, i) => HardwareAssertion.checkTimeout(w.state === DCUWState.Free, TIMEOUT_DCU_W, cf"DCU ReadBuffer[${i}] STATE[${w.state}] TIMEOUT", w.state) } }
 
   /*
    * Hardware Assertion Node And IO
    */
-  private val assertionNode = HardwareAssertion.placePipe(2, true)
+  private val assertionNode = HardwareAssertion.placePipe(Int.MaxValue-1, true)
   @public
   val assertionOut = IO(assertionNode.assertion.cloneType)
   @public
