@@ -79,8 +79,18 @@ class SingleChannelTap[T <: Flit](gen: T, channel: String, node: Node)(implicit 
   rsvdNext.valid := (state(injectRsvdShift) || io.in.rsvd.valid) && !injectFire
   rsvdNext.bits := Mux(state(injectRsvdShift) && !io.in.rsvd.valid, rsvdMarkVal, io.in.rsvd.bits)
 
-  io.out.flit := Pipe(flitNext)
-  io.out.rsvd := Pipe(rsvdNext)
+  private val flitVReg = RegNext(flitNext.valid, false.B)
+  private val flitBReg = RegEnable(flitNext.bits, io.inject.valid || io.in.flit.valid)
+  private val rsvdVReg = RegNext(rsvdNext.valid, false.B)
+  private val rsvdBReg = RegEnable(rsvdNext.bits, state(injectRsvdShift) || io.in.rsvd.valid)
+  io.out.flit.valid := flitVReg
+  io.out.flit.bits := flitBReg
+  io.out.rsvd.valid := rsvdVReg
+  io.out.rsvd.bits := rsvdBReg
+  flitVReg.suggestName("flit_pipe_v")
+  flitBReg.suggestName("flit_pipe_b")
+  rsvdVReg.suggestName("rsvd_pipe_v")
+  rsvdBReg.suggestName("rsvd_pipe_b")
 
   private val matcher = io.matchTag.asTypeOf(new NodeIdBundle)
   if(local) {
