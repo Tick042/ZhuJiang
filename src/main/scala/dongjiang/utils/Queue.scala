@@ -33,6 +33,7 @@ class DecoupledQueue[T <: Data](gen:T) extends Module {
 
   io.enq <> q.io.enq
   io.deq <> q.io.deq
+  io.deq.bits := Mux(deqValidReg, q.io.deq.bits, 0.U.asTypeOf(io.deq.bits))
   io.enq.ready := enqReadyReg
   io.deq.valid := deqValidReg
   io.count := q.io.count
