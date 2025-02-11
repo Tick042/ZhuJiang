@@ -750,15 +750,14 @@ object LoaclAtomicDecode {
 
 object LoaclSnpUniqueEvictDecode {
   def snpUniqueEvict: Seq[(UInt, UInt)] = Seq(
-    LocalSnpInst(SnpUniqueEvict,  I,  I,  I)    -> ERROE,
-    LocalSnpInst(SnpUniqueEvict,  I,  I, SC)    -> ERROE,
-    LocalSnpInst(SnpUniqueEvict,  I,  I, SD)    -> ERROE,
-    LocalSnpInst(SnpUniqueEvict,  I,  I,  I)    -> ERROE,
+    LocalSnpInst(SnpUniqueEvict,  I,  I,  I)    -> (SnpAll | SnpOp(SnpUnique) | RetToSrc | SnpNeedDB),
+    LocalSnpInst(SnpUniqueEvict,  I,  I, SC)    -> (SnpAll | SnpOp(SnpUnique) | RetToSrc | SnpNeedDB),
+    LocalSnpInst(SnpUniqueEvict,  I,  I, SD)    -> (SnpAll | SnpOp(SnpUnique) | RetToSrc | SnpNeedDB),
     // ----------------------------------------------------------- LOCAL RESP ------------------------------------------------------------//
     LocalRespInst(SNP, SnpUniqueEvict,  I,  I,  I, Snp,  HasData, rn = ChiResp.I)    -> (WSDir | HnState(UC) | WriteDCU | WriOp(WriteNoSnpFull)),
+    LocalRespInst(SNP, SnpUniqueEvict,  I,  I,  I, Snp,  HasData, rn = ChiResp.I_PD) -> (WSDir | HnState(UD) | WriteDCU | WriOp(WriteNoSnpFull)),
     LocalRespInst(SNP, SnpUniqueEvict,  I,  I, SC, Snp,  HasData, rn = ChiResp.I)    -> (WSDir | HnState(UC) | CleanDB),
     LocalRespInst(SNP, SnpUniqueEvict,  I,  I, SD, Snp,  HasData, rn = ChiResp.I)    -> (WSDir | HnState(UD) | CleanDB),
-    LocalRespInst(SNP, SnpUniqueEvict,  I,  I,  I, Snp,  HasData, rn = ChiResp.I_PD) -> (WSDir | HnState(UD) | WriteDCU | WriOp(WriteNoSnpFull))
   )
 
   def table: Seq[(UInt, UInt)] = snpUniqueEvict
