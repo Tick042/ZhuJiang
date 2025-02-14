@@ -67,7 +67,7 @@ class SingleChannelTap[T <: Flit](gen: T, channel: String, node: Node)(implicit 
     assert(state(waitSlotShift), "Unexpected reserved slot!")
   }
 
-  private val emptySlot = Mux(io.in.flit.valid, ejectFire, true.B)
+  private val emptySlot = !io.in.flit.valid
   private val availableSlot = Mux(io.in.rsvd.valid, meetRsvdSlot, !state(waitSlotShift))
   dontTouch(emptySlot)
   dontTouch(availableSlot)
