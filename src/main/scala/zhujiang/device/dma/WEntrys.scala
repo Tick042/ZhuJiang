@@ -130,4 +130,14 @@ class ChiWEntrys(implicit p: Parameters) extends ZJModule with HasCircularQueueP
   io.rdDB.bits       := rdDBBdl
   io.axiB.valid      := !(sendBPtr.value === uWPtr.set & sendBPtr.flag === uWPtr.flag)
   io.axiB.bits       := axiBBdl
+
+  when(uWPtr.flag === sendBPtr.flag){
+    assert(uWPtr.set >= sendBPtr.value)
+  }
+  when(uWPtr.flag === dHeadPtr.flag){
+    assert(uWPtr.set <= dHeadPtr.value)
+  }
+  when(dHeadPtr.flag === dTailPtr.flag){
+    assert(dHeadPtr.value >= dTailPtr.value)
+  }
 }

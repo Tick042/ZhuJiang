@@ -10,7 +10,6 @@ import zhujiang.axi._
 import xs.utils.sram._
 import xijiang._
 import xs.utils.{CircularQueuePtr, HasCircularQueuePtrHelper}
-
 class AxiSpilt(implicit p : Parameters) extends ZJModule with HasCircularQueuePtrHelper{
   private val dmaParams = zjParams.dmaParams
   private val axiParams = AxiParams(dataBits = dw, addrBits = raw, idBits = dmaParams.idBits)
@@ -66,6 +65,7 @@ class AxiSpilt(implicit p : Parameters) extends ZJModule with HasCircularQueuePt
   private val dAwHeadPtr    = RegInit(CirQChiEntryPtr(f = false.B, v = 0.U))
   private val dAwTailPtr    = RegInit(CirQChiEntryPtr(f = false.B, v = 0.U))
   private val wDataPtr      = RegInit(CirQChiEntryPtr(f = false.B, v = 0.U))
+  private val bIdQueue      = Module(new Queue(gen = UInt(axiParams.idBits.W), entries = 2, pipe = false, flow = false))
 
   private val txAwBdl     = WireInit(0.U.asTypeOf(new AWFlit(axiParams)))
   private val wrDataReg   = RegInit(0.U(dw.W))
@@ -184,9 +184,12 @@ class AxiSpilt(implicit p : Parameters) extends ZJModule with HasCircularQueuePt
   sendCnts                  := Mux(rxAxi.r.fire & lenQueue.io.deq.bits.len =/= sendCnts, sendCnts + 1.U, Mux(rxAxi.r.fire & lenQueue.io.deq.bits.len === sendCnts, 0.U, sendCnts))
 
 // B Resp cause dAwTailPtr to increase
-  when(txAxi.b.fire & rxAxi.b.ready){
+  when(txAxi.b.fire){
     dAwTailPtr    := dAwTailPtr + 1.U
   }
+  bIdQueue.io.deq.ready    := rxAxi.b.ready
+  bIdQueue.io.enq.valid    := spiltAwEntrys(dAwTailPtr.value).last & txAxi.b.fire
+  bIdQueue.io.enq.bits     := spiltAwEntrys(dAwTailPtr.value).id
 
 // Merge logic for writing data
     wrMaskReg := Mux(txAxi.w.fire, Mux(rxAxi.w.fire, rxAxi.w.bits.strb, 0.U), Mux(rxAxi.w.fire, rxAxi.w.bits.strb | wrMaskReg, wrMaskReg))
@@ -215,10 +218,10 @@ class AxiSpilt(implicit p : Parameters) extends ZJModule with HasCircularQueuePt
   txAxi.w.bits.data := wrDataReg
   txAxi.w.bits.strb := wrMaskReg
   txAxi.w.bits.last := RegNext(!(spiltAwEntrys(wDataPtr.value).shift + spiltAwEntrys(wDataPtr.value).size)(5, 0).orR) | RegNext(rxAxi.w.bits.last)
-  txAxi.b.ready     := rxAxi.b.ready
+  txAxi.b.ready     := bIdQueue.io.enq.ready
   rxAxi.b.bits      := 0.U.asTypeOf(rxAxi.b.bits)
-  rxAxi.b.bits.id   := spiltAwEntrys(dAwTailPtr.value).id
-  rxAxi.b.valid     := spiltAwEntrys(dAwTailPtr.value).last & txAxi.b.valid
+  rxAxi.b.bits.id   := bIdQueue.io.deq.bits
+  rxAxi.b.valid     := bIdQueue.io.deq.valid
 
 /* 
  * Assertion
@@ -246,5 +249,8 @@ class AxiSpilt(implicit p : Parameters) extends ZJModule with HasCircularQueuePt
   }
   when(txAxi.aw.fire){
     assert(txAxi.aw.bits.len === 0.U | txAxi.aw.bits.len === 1.U, "Spilt logic is error!")
+  }
+  when(dAwTailPtr.flag === dAwHeadPtr.flag){
+    assert(dAwTailPtr.value <= dAwHeadPtr.value)
   }
 }

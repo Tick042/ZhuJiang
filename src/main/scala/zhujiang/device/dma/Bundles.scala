@@ -124,7 +124,7 @@ class ChiDBPtr(chiEntrySize: Int) extends Bundle {
   }
   def PtrWrAdd[T <: CHIWEntry](c: T): ChiDBPtr = {
     this.poi  := Mux(c.double & this.poi === 0.U, 1.U, 0.U)
-    this.flag := Mux((this.set + 1.U)(log2Ceil(chiEntrySize) - 1, 0) === 0.U & this.poi === 0.U, !this.flag, this.flag)
+    this.flag := Mux((this.set + 1.U)(log2Ceil(chiEntrySize) - 1, 0) === 0.U & (this.poi === 1.U | this.poi === 0.U & !c.double), !this.flag, this.flag)
     this.set  := Mux(!c.double | c.double & this.poi === 1.U, this.set + 1.U, this.set)
     this
   }
