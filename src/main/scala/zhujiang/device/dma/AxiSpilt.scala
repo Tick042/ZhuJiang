@@ -65,7 +65,7 @@ class AxiSpilt(implicit p : Parameters) extends ZJModule with HasCircularQueuePt
   private val spiltAwEntrys = Reg(Vec(dmaParams.chiEntrySize, new SpiltAwValue))
   private val dAwHeadPtr    = RegInit(CirQChiEntryPtr(f = false.B, v = 0.U))
   private val dAwTailPtr    = RegInit(CirQChiEntryPtr(f = false.B, v = 0.U))
-  private val wDataPtr      = RegInit(0.U(log2Ceil(dmaParams.chiEntrySize).W))
+  private val wDataPtr      = RegInit(CirQChiEntryPtr(f = false.B, v = 0.U))
 
   private val txAwBdl     = WireInit(0.U.asTypeOf(new AWFlit(axiParams)))
   private val wrDataReg   = RegInit(0.U(dw.W))
@@ -170,8 +170,8 @@ class AxiSpilt(implicit p : Parameters) extends ZJModule with HasCircularQueuePt
   }
 // Write SpiltAwEntrys shift
   when(rxAxi.w.fire){
-    wDataPtr := Mux(rxAxi.w.bits.last | ((spiltAwEntrys(wDataPtr).shift + spiltAwEntrys(wDataPtr).size) === 0.U), wDataPtr + 1.U, wDataPtr)
-    spiltAwEntrys(wDataPtr).shift := spiltAwEntrys(wDataPtr).shift + spiltAwEntrys(wDataPtr).size
+    wDataPtr := Mux(rxAxi.w.bits.last | ((spiltAwEntrys(wDataPtr.value).shift + spiltAwEntrys(wDataPtr.value).size) === 0.U), wDataPtr + 1.U, wDataPtr)
+    spiltAwEntrys(wDataPtr.value).shift := spiltAwEntrys(wDataPtr.value).shift + spiltAwEntrys(wDataPtr.value).size
   }
 
 // datQueue receive data and send data logic
@@ -207,14 +207,14 @@ class AxiSpilt(implicit p : Parameters) extends ZJModule with HasCircularQueuePt
   rxAxi.r.valid     := datQueue.io.deq.valid
 // Write interface
   rxAxi.aw.ready    := !isFull(uAwHeadPtr, uAwTailPtr)
-  rxAxi.w.ready     := dAwHeadPtr =/= dAwTailPtr & wDataPtr =/= dAwHeadPtr.value
+  rxAxi.w.ready     := dAwHeadPtr =/= dAwTailPtr & wDataPtr =/= dAwHeadPtr
   txAxi.aw.valid    := uAwHeadPtr =/= uAwTailPtr & !isFull(dAwHeadPtr, dAwTailPtr)
   txAxi.aw.bits     := txAwBdl
-  txAxi.w.valid     := (RegNext(!(spiltAwEntrys(wDataPtr).shift + spiltAwEntrys(wDataPtr).size)(4, 0).orR) | RegNext(rxAxi.w.bits.last)) & RegNext(rxAxi.w.fire)
+  txAxi.w.valid     := (RegNext(!(spiltAwEntrys(wDataPtr.value).shift + spiltAwEntrys(wDataPtr.value).size)(4, 0).orR) | RegNext(rxAxi.w.bits.last)) & RegNext(rxAxi.w.fire)
   txAxi.w.bits      := 0.U.asTypeOf(txAxi.w.bits)
   txAxi.w.bits.data := wrDataReg
   txAxi.w.bits.strb := wrMaskReg
-  txAxi.w.bits.last := RegNext(!(spiltAwEntrys(wDataPtr).shift + spiltAwEntrys(wDataPtr).size)(5, 0).orR) | RegNext(rxAxi.w.bits.last)
+  txAxi.w.bits.last := RegNext(!(spiltAwEntrys(wDataPtr.value).shift + spiltAwEntrys(wDataPtr.value).size)(5, 0).orR) | RegNext(rxAxi.w.bits.last)
   txAxi.b.ready     := rxAxi.b.ready
   rxAxi.b.bits      := 0.U.asTypeOf(rxAxi.b.bits)
   rxAxi.b.bits.id   := spiltAwEntrys(dAwTailPtr.value).id
