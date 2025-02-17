@@ -170,7 +170,7 @@ class AxiSpilt(implicit p : Parameters) extends ZJModule with HasCircularQueuePt
   }
 // Write SpiltAwEntrys shift
   when(rxAxi.w.fire){
-    wDataPtr := Mux(rxAxi.w.bits.last | ((spiltAwEntrys(wDataPtr.value).shift + spiltAwEntrys(wDataPtr.value).size) === 0.U), wDataPtr + 1.U, wDataPtr)
+    wDataPtr := Mux(rxAxi.w.bits.last | ((spiltAwEntrys(wDataPtr.value).shift + spiltAwEntrys(wDataPtr.value).size) === 0.U | spiltAwEntrys(wDataPtr.value).burst =/= BurstMode.Incr), wDataPtr + 1.U, wDataPtr)
     spiltAwEntrys(wDataPtr.value).shift := spiltAwEntrys(wDataPtr.value).shift + spiltAwEntrys(wDataPtr.value).size
   }
 
@@ -213,7 +213,7 @@ class AxiSpilt(implicit p : Parameters) extends ZJModule with HasCircularQueuePt
   rxAxi.w.ready     := dAwHeadPtr =/= dAwTailPtr & wDataPtr =/= dAwHeadPtr
   txAxi.aw.valid    := uAwHeadPtr =/= uAwTailPtr & !isFull(dAwHeadPtr, dAwTailPtr)
   txAxi.aw.bits     := txAwBdl
-  txAxi.w.valid     := (RegNext(!(spiltAwEntrys(wDataPtr.value).shift + spiltAwEntrys(wDataPtr.value).size)(4, 0).orR) | RegNext(rxAxi.w.bits.last)) & RegNext(rxAxi.w.fire)
+  txAxi.w.valid     := (RegNext(!(spiltAwEntrys(wDataPtr.value).shift + spiltAwEntrys(wDataPtr.value).size)(4, 0).orR) | RegNext(rxAxi.w.bits.last) | RegNext(spiltAwEntrys(wDataPtr.value).burst =/= BurstMode.Incr)) & RegNext(rxAxi.w.fire)
   txAxi.w.bits      := 0.U.asTypeOf(txAxi.w.bits)
   txAxi.w.bits.data := wrDataReg
   txAxi.w.bits.strb := wrMaskReg
