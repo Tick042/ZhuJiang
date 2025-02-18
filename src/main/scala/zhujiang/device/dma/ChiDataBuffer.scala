@@ -69,7 +69,7 @@ class ChiDataBufferFreelist(ctrlSize: Int, bufferSize: Int)(implicit p: Paramete
 
   private val allocNum = Mux(io.req.fire, reqNum, 0.U)
   private val relNum   = Mux(io.release.valid, 1.U, 0.U)
-
+//TODO: Bypass release to req
   when(io.req.fire || io.release.valid) {
     headPtr      := headPtr + allocNum
     tailPtr      := tailPtr + relNum
@@ -185,7 +185,7 @@ class ChiDataBufferWrRam(bufferSize: Int)(implicit p: Parameters) extends ZJModu
   private val readRamStage2Pipe = Module(new Queue(new DataFlit, entries = 1, pipe = true))
   private val wDataVec          = Wire(Vec(bew, UInt(8.W)))
   private val releaseSet        = Reg(UInt(log2Ceil(zjParams.dmaParams.bufferSize).W))
-
+//TODO: use maskRam foreach
   when(wrRamQ.io.deq.fire){
     maskRam(wrRamQ.io.deq.bits.set) := wrRamQ.io.deq.bits.mask | maskRam(wrRamQ.io.deq.bits.set)
   }
@@ -221,6 +221,7 @@ class ChiDataBufferWrRam(bufferSize: Int)(implicit p: Parameters) extends ZJModu
   io.readDataResp <> readRamStage2Pipe.io.deq
   io.relSet.valid   := readRamState1Pipe.io.deq.fire
   io.relSet.bits    := readRamState1Pipe.io.deq.bits.set
+  //TODO:delete RegNext  RM add mask assert logic
   when(RegNext(readRamState1Pipe.io.deq.fire)){
     maskRam(releaseSet) := 0.U
   }

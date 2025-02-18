@@ -52,12 +52,14 @@ class ChiWEntrys(implicit p: Parameters) extends ZJModule with HasCircularQueueP
   private val sendReqPtr = RegInit(CirQChiEntryPtr(f = false.B, v = 0.U))
   private val reqDBPtr   = RegInit(CirQChiEntryPtr(f = false.B, v = 0.U))
   private val sendDatPtr = RegInit(0.U.asTypeOf(new ChiDBPtr(dmaParams.chiEntrySize)))
+  //TODO:Receive comp or CompDBIDResp can send BResp
   private val sendBPtr   = RegInit(CirQChiEntryPtr(f = false.B, v = 0.U))
 
   when(io.axiAw.fire){
     dEntrys(dHeadPtr.value).AWMesInit(io.axiAw.bits)
     dHeadPtr := dHeadPtr + 1.U
   }
+  // TODO:change all when to foreach
   when(io.respDB.valid){
     dEntrys(reqDBPtr.value).haveAllocDB := true.B
     dEntrys(reqDBPtr.value).dbSite1     := io.respDB.bits.buf(0)
