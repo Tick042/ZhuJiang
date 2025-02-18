@@ -100,13 +100,13 @@ class AxiSpilt(implicit p : Parameters) extends ZJModule with HasCircularQueuePt
   lenQueue.io.enq.bits.burst := rxAxi.ar.bits.burst
 
 //Read wire declare
-  private val uArTailE   = WireInit(uArEntrys(uArTailPtr.value))
-  private val singleIncr = WireInit(uArTailE.cnt + (1.U << 5.U >> uArTailE.size) >= uArTailE.len)
-  private val doubleIncr = WireInit(uArTailE.cnt + (1.U << 6.U >> uArTailE.size) >= uArTailE.len)
+  private val uArTailE     = WireInit(uArEntrys(uArTailPtr.value))
+  private val singleArIncr = WireInit(uArTailE.cnt + (("b100000".U - uArTailE.shiftAddr(4, 0)) >> uArTailE.size) >= uArTailE.len)
+  private val doubleArIncr = WireInit(uArTailE.cnt + (("b1000000".U - uArTailE.shiftAddr(5, 0)) >> uArTailE.size) >= uArTailE.len)
 //Write wire declare
-  private val uAwTailE   = WireInit(uAwEntrys(uAwTailPtr.value))
-  private val singleAdd  = WireInit(uAwTailE.cnt + (1.U << 5.U >> uAwTailE.size) >= uAwTailE.len)
-  private val doubleAdd  = WireInit(uAwTailE.cnt + (1.U << 6.U >> uAwTailE.size) >= uAwTailE.len)
+  private val uAwTailE      = WireInit(uAwEntrys(uAwTailPtr.value))
+  private val singleAwIncr  = WireInit(uAwTailE.cnt + (("b100000".U - uAwTailE.shiftAddr(4, 0)) >> uAwTailE.size) >= uAwTailE.len)
+  private val doubleAwIncr  = WireInit(uAwTailE.cnt + (("b1000000".U - uAwTailE.shiftAddr(5, 0)) >> uAwTailE.size) >= uAwTailE.len)
 
 
 // Send the convert axi Ar req
@@ -115,14 +115,14 @@ class AxiSpilt(implicit p : Parameters) extends ZJModule with HasCircularQueuePt
   txArBdl.id     := uArTailE.arId
   txArBdl.burst  := BurstMode.Incr
   txArBdl.size   := Mux(uArTailE.prefixAddr(35) | uArTailE.burst =/= BurstMode.Incr, uArTailE.size, log2Ceil(dw/8).U)
-  txArBdl.len    := Mux(uArTailE.shiftAddr(5) | uArTailE.burst =/= BurstMode.Incr | singleIncr, 0.U, 1.U)
+  txArBdl.len    := Mux(uArTailE.shiftAddr(5) | uArTailE.burst =/= BurstMode.Incr | singleArIncr, 0.U, 1.U)
 // Send the convert axi Aw req
   txAwBdl        := 0.U.asTypeOf(txAwBdl)
   txAwBdl.addr   := Mux(uAwTailE.prefixAddr(35) | uAwTailE.burst =/= BurstMode.Incr, Cat(uAwTailE.prefixAddr, uAwTailE.shiftAddr), Cat(uAwTailE.prefixAddr, uAwTailE.shiftAddr(11, 5), 0.U(5.W)))
   txAwBdl.id     := dAwHeadPtr.value
   txAwBdl.burst  := BurstMode.Incr
   txAwBdl.size   := Mux(uAwTailE.prefixAddr(35) | uAwTailE.burst =/= BurstMode.Incr, uAwTailE.size, log2Ceil(dw/8).U)
-  txAwBdl.len    := Mux(uAwTailE.shiftAddr(5) | uAwTailE.burst =/= BurstMode.Incr | singleAdd, 0.U, 1.U)
+  txAwBdl.len    := Mux(uAwTailE.shiftAddr(5) | uAwTailE.burst =/= BurstMode.Incr | singleAwIncr , 0.U, 1.U)
 
 
 // Update the value of uArEntry and spiltArEntrys
@@ -132,7 +132,7 @@ class AxiSpilt(implicit p : Parameters) extends ZJModule with HasCircularQueuePt
     uArEntrys(uArTailPtr.value).shiftAddr := Mux(uArTailE.burst === BurstMode.Incr, Cat((uArTailE.shiftAddr(11,6) + 1.U), 0.U(6.W)), 
                                                 Mux(uArTailE.burst === BurstMode.Wrap, (uArTailE.shiftAddr + (1.U << uArTailE.size)) & uArTailE.addrMask | ~(~uArTailE.shiftAddr | uArTailE.addrMask),
                                                      uArTailE.shiftAddr))
-    uArEntrys(uArTailPtr.value).cnt       := Mux(uArTailE.burst === BurstMode.Incr, Mux(uArTailE.shiftAddr(5, 0).orR, uArTailE.cnt + ((0.U(6.W) - uArTailE.shiftAddr(5, 0)) >> uArTailE.size), uArTailE.cnt + (1.U << 6.U >> uArTailE.size)), uArTailE.cnt + 1.U)
+    uArEntrys(uArTailPtr.value).cnt       := Mux(uArTailE.burst === BurstMode.Incr, Mux(uArTailE.shiftAddr(5, 0).orR, uArTailE.cnt + (("b1000000".U - uArTailE.shiftAddr(5, 0)) >> uArTailE.size), uArTailE.cnt + (1.U << 6.U >> uArTailE.size)), uArTailE.cnt + 1.U)
     dArHeadPtr                            := dArHeadPtr + 1.U
   }
 // Update the value of uAwEntry and spiltAwEntrys
@@ -151,11 +151,11 @@ class AxiSpilt(implicit p : Parameters) extends ZJModule with HasCircularQueuePt
 
 
 // uArTailPtr add logic
-  when(txAxi.ar.fire & (uArTailE.burst === BurstMode.Incr & (txAxi.ar.bits.len === 0.U & singleIncr | txAxi.ar.bits.len === 1.U & doubleIncr) | uArTailE.burst =/= BurstMode.Incr & uArTailE.cnt + 1.U === uArTailE.len)){
+  when(txAxi.ar.fire & (uArTailE.burst === BurstMode.Incr & doubleArIncr | uArTailE.burst =/= BurstMode.Incr & uArTailE.cnt + 1.U === uArTailE.len)){
     uArTailPtr := uArTailPtr + 1.U
   }
 // uAwTailPtr add logic
-  when(txAxi.aw.fire & (uAwTailE.burst === BurstMode.Incr & (txAxi.aw.bits.len === 0.U & singleAdd | txAxi.aw.bits.len === 1.U & doubleAdd) | uAwTailE.burst =/= BurstMode.Incr & uAwTailE.cnt + 1.U === uAwTailE.len)){
+  when(txAxi.aw.fire & (uAwTailE.burst === BurstMode.Incr & doubleAwIncr | uAwTailE.burst =/= BurstMode.Incr & uAwTailE.cnt + 1.U === uAwTailE.len)){
     uAwTailPtr := uAwTailPtr + 1.U
     spiltAwEntrys(dAwHeadPtr.value).last := true.B
   }
@@ -170,7 +170,7 @@ class AxiSpilt(implicit p : Parameters) extends ZJModule with HasCircularQueuePt
   }
 // Write SpiltAwEntrys shift
   when(rxAxi.w.fire){
-    wDataPtr := Mux(rxAxi.w.bits.last | ((spiltAwEntrys(wDataPtr.value).shift + spiltAwEntrys(wDataPtr.value).size) === 0.U), wDataPtr + 1.U, wDataPtr)
+    wDataPtr := Mux(rxAxi.w.bits.last | ((spiltAwEntrys(wDataPtr.value).shift + spiltAwEntrys(wDataPtr.value).size) === 0.U | spiltAwEntrys(wDataPtr.value).burst =/= BurstMode.Incr), wDataPtr + 1.U, wDataPtr)
     spiltAwEntrys(wDataPtr.value).shift := spiltAwEntrys(wDataPtr.value).shift + spiltAwEntrys(wDataPtr.value).size
   }
 
@@ -213,7 +213,7 @@ class AxiSpilt(implicit p : Parameters) extends ZJModule with HasCircularQueuePt
   rxAxi.w.ready     := dAwHeadPtr =/= dAwTailPtr & wDataPtr =/= dAwHeadPtr
   txAxi.aw.valid    := uAwHeadPtr =/= uAwTailPtr & !isFull(dAwHeadPtr, dAwTailPtr)
   txAxi.aw.bits     := txAwBdl
-  txAxi.w.valid     := (RegNext(!(spiltAwEntrys(wDataPtr.value).shift + spiltAwEntrys(wDataPtr.value).size)(4, 0).orR) | RegNext(rxAxi.w.bits.last)) & RegNext(rxAxi.w.fire)
+  txAxi.w.valid     := (RegNext(!(spiltAwEntrys(wDataPtr.value).shift + spiltAwEntrys(wDataPtr.value).size)(4, 0).orR) | RegNext(rxAxi.w.bits.last) | RegNext(spiltAwEntrys(wDataPtr.value).burst =/= BurstMode.Incr)) & RegNext(rxAxi.w.fire)
   txAxi.w.bits      := 0.U.asTypeOf(txAxi.w.bits)
   txAxi.w.bits.data := wrDataReg
   txAxi.w.bits.strb := wrMaskReg
