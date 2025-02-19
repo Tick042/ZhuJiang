@@ -98,7 +98,7 @@ class AxiDataBufferRam(axiParams: AxiParams, bufferSize: Int)(implicit p: Parame
   private val dataRam = Module(new SRAMTemplate(
     gen = UInt(dw.W),
     set = bufferSize,
-    singlePort = true,
+    singlePort = false,
     powerCtl = true,
     holdRead = true
   ))
