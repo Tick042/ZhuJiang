@@ -49,6 +49,7 @@ class ChiRdCtrl(implicit p: Parameters) extends ZJModule with HasCircularQueuePt
   private val rxRctPtr  = RegInit(CirQChiEntryPtr(f = false.B, v = 0.U))
   private val txDatPtr  = RegInit(0.U.asTypeOf(new ChiDBPtr(dmaParams.chiEntrySize)))
   //Wire define
+  //TODO:delete wire
   private val rcvIsRct   = WireInit(io.chiRsp.fire & io.chiRsp.bits.Opcode === RspOpcode.ReadReceipt)
   private val txReqBdl   = WireInit(0.U.asTypeOf(new DmaReqFlit))
   private val dataTxnid  = io.chiDat.bits.TxnID(log2Ceil(dmaParams.chiEntrySize) - 1, 0)
@@ -65,6 +66,13 @@ class ChiRdCtrl(implicit p: Parameters) extends ZJModule with HasCircularQueuePt
   when(io.rdDB.fire){
     txDatPtr.PtrRdAdd(chiEntrys(txDatPtr.set))
   }
+
+  assert(reqDBPtr <= headPtr)
+  assert(txReqPtr <= reqDBPtr)
+//  assert(txDatPtr <= txReqPtr)
+  //
+  assert(tailPtr <= rxRctPtr)
+  assert(rxRctPtr <= txReqPtr)
 
 
   def fromDCT(x: UInt): Bool = {
@@ -85,11 +93,11 @@ class ChiRdCtrl(implicit p: Parameters) extends ZJModule with HasCircularQueuePt
   chiEntrys.zipWithIndex.foreach{
     case(e, i) =>
       when(headPtr.value === i.U & io.axiAr.fire){
-        e.ARMesInit(io.axiAr.bits)
+        e.ARMesInit(io.axiAr.bits) //TODO: change name => initArMsg
       }.elsewhen(reqDBPtr.value === i.U & io.reqDB.fire){
         e.dbSite1  := io.respDB.bits.buf(0)
         e.dbSite2  := io.respDB.bits.buf(1)
-      }.elsewhen(dataTxnid === i.U & io.wrDB.fire & io.chiDat.bits.DataID === 0.U){
+      }.elsewhen(dataTxnid === i.U & io.wrDB.fire & io.chiDat.bits.DataID === 0.U){ //TODO: change when and DCT logic
         e.haveWrDB1 := true.B
       }.elsewhen(dataTxnid === i.U & io.wrDB.fire & io.chiDat.bits.DataID === 2.U){
         e.haveWrDB2 := true.B
@@ -109,12 +117,15 @@ class ChiRdCtrl(implicit p: Parameters) extends ZJModule with HasCircularQueuePt
   io.chiReq.bits     := txReqBdl
   io.wrDB.bits.data  := io.chiDat.bits.Data
   io.wrDB.bits.set   := Mux(chiEntrys(dataTxnid).double & io.chiDat.bits.DataID === 2.U, chiEntrys(dataTxnid).dbSite2, chiEntrys(dataTxnid).dbSite1)
+  //TODO:Delete DCT logic
   io.wrDB.valid      := Mux(chiEntrys(dataTxnid).double, io.chiDat.valid, 
                           Mux(fromDCT(io.chiDat.bits.SrcID), Mux(chiEntrys(dataTxnid).addr(5), io.chiDat.bits.DataID === 2.U & io.chiDat.valid, 
                             io.chiDat.valid & io.chiDat.bits.DataID === 0.U), io.chiDat.valid))
+  // TODO:  change this logic to true
   io.chiDat.ready    := io.wrDB.ready
   io.chiRsp.ready    := true.B
   io.rdDB.bits       := txDatBdl
+  //TODO: change logic
   io.rdDB.valid      := (chiEntrys(txDatPtr.set).haveWrDB1 & chiEntrys(txDatPtr.set).haveWrDB2 & chiEntrys(txDatPtr.set).double |
                         !chiEntrys(txDatPtr.set).double & chiEntrys(txDatPtr.set).haveWrDB1) & !(txDatPtr.set === headPtr.value & txDatPtr.flag === headPtr.flag)
   

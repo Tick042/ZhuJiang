@@ -35,6 +35,7 @@ object BurstMode {
 }
 
 class AxiRdEntry(implicit p: Parameters) extends ZJBundle {
+  //TODO: raw
   val prefixAddr   = UInt(36.W)
   val shiftAddr    = UInt(12.W)
   val addrMask     = UInt(12.W)
@@ -168,6 +169,7 @@ class CHIREntry(implicit p : Parameters) extends ZJBundle {
   val size           = UInt(3.W)
   val dbSite1        = UInt(log2Ceil(zjParams.dmaParams.bufferSize).W)
   val dbSite2        = UInt(log2Ceil(zjParams.dmaParams.bufferSize).W)
+  //TODO:Change DCT DMT logic
   val haveWrDB1      = Bool()
   val haveWrDB2      = Bool()
 
