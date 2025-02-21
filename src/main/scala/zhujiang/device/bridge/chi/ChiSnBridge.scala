@@ -95,7 +95,7 @@ class ChiSnBridge(node: Node)(implicit p: Parameters) extends ZJModule {
   readDataPipe.io.enq.bits := sn.rx.data.get.bits.asTypeOf(new DataFlit)
 
   readDataPipe.io.enq.bits.Opcode := DatOpcode.CompData
-  readDataPipe.io.enq.bits.DataID := 0.U
+  readDataPipe.io.enq.bits.DataID := ctrlSel.addr(5, 4)
   readDataPipe.io.enq.bits.TxnID := ctrlSel.txnId
   readDataPipe.io.enq.bits.SrcID := 0.U
   readDataPipe.io.enq.bits.TgtID := ctrlSel.srcId
