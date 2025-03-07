@@ -85,7 +85,6 @@ class AxiBridge(node: Node)(implicit p: Parameters) extends ZJModule with HasPer
   private val enqCtrl = PickOneLow(busyEntries)
 
   icn.rx.req.get.ready := enqCtrl.valid
-  icn.rx.data.get.ready := true.B
   axi.r.ready := true.B
   axi.b.ready := true.B
 
