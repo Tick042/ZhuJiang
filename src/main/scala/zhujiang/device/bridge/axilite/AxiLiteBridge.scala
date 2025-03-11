@@ -75,7 +75,6 @@ class AxiLiteBridge(node: Node, busDataBits: Int, tagOffset: Int)(implicit p: Pa
   icn.rx.req.get.ready := enqCtrl.valid
   icn.rx.resp.get.ready := true.B
   icn.rx.data.get.ready := true.B
-  axi.r.ready := true.B
   axi.b.ready := true.B
 
   for((cm, idx) <- cms.zipWithIndex) {

@@ -69,7 +69,6 @@ class ChiSnBridge(node: Node)(implicit p: Parameters) extends ZJModule {
   icn.rx.resp.get.ready := true.B
   icn.rx.data.get.ready := true.B
   sn.rx.resp.get.ready := true.B
-  sn.rx.data.get.ready := true.B
   for((cm, idx) <- cms.zipWithIndex) {
     cm.icn.rx.req.valid := icn.rx.req.get.valid && enqCtrl.bits(idx)
     cm.icn.rx.req.bits := icn.rx.req.get.bits.asTypeOf(new ReqFlit)
