@@ -156,6 +156,7 @@ class TaskBuffer(sort: Boolean, nrEntry: Int)(implicit p: Parameters) extends DJ
                                                               desc = cf"Task Buffer Index[${i}] State[${ctrl.state}]")
       HardwareAssertion.withEn(ctrl.nid.getOrElse(0.U) > 0.U, reduceHit,
                                                               desc = cf"Task Buffer Index[${i}] State[${ctrl.state}]")
+      if(i % 16 == 0) HardwareAssertion.placePipe(Int.MaxValue-3)
   }
 
   /*

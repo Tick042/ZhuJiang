@@ -135,5 +135,5 @@ class Directory(implicit p: Parameters) extends DJModule {
   /*
    * HardwareAssertion placePipe
    */
-   HardwareAssertion.placePipe(Int.MaxValue - 1)
+   HardwareAssertion.placePipe(Int.MaxValue-1)
 }

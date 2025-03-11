@@ -183,7 +183,6 @@ class DirectoryBase(dirType: String, dirBank: Int)(implicit p: Parameters) exten
   HardwareAssertion.withEn(replArray.io.wreq.ready, replArray.io.wreq.valid)
 
 
-
   // ---------------------------------------------------------------------------------------------------------------------- //
   // --------------------------------------- [D1]: Get SRAM Resp and Update repl resp ------------------------------------- //
   // ---------------------------------------------------------------------------------------------------------------------- //
@@ -256,8 +255,10 @@ class DirectoryBase(dirType: String, dirBank: Int)(implicit p: Parameters) exten
   io.resp.wayOH   := selWayOH_d2
   io.resp.hit     := hit_d2
   io.resp.metaVec := metaVec_d2(selWay)
+  HardwareAssertion.placePipe(Int.MaxValue-3)
 
   // Update Lock Table
+  // TODO: Size
   lockTable.zipWithIndex.foreach {
     case(lockSet, i) =>
       lockSet.zipWithIndex.foreach {
@@ -279,11 +280,11 @@ class DirectoryBase(dirType: String, dirBank: Int)(implicit p: Parameters) exten
           HardwareAssertion.withEn(lock.valid,  cleanLock0 | cleanLock1, cf"Lock Table Index[$i][$j]")
       }
   }
-
+  HardwareAssertion.placePipe(Int.MaxValue-3)
 
 
   /*
    * HardwareAssertion placePipe
    */
-  HardwareAssertion.placePipe(Int.MaxValue - 2)
+  HardwareAssertion.placePipe(Int.MaxValue-2)
 }

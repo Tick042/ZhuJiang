@@ -115,6 +115,7 @@ class PoS(dirBank: Int)(implicit p: Parameters) extends DJModule {
           HardwareAssertion(!(updHit & reqHit))
       }
   }
+  HardwareAssertion.placePipe(Int.MaxValue-3)
 
   /*
    * Modify pos ctrl
@@ -147,6 +148,7 @@ class PoS(dirBank: Int)(implicit p: Parameters) extends DJModule {
           HardwareAssertion.withEn(!ctrl.canNest, canNestHit,       desc = cf"PoS Index[${i}][${j}]")
       }
   }
+  HardwareAssertion.placePipe(Int.MaxValue-3)
 
   /*
    * wakeup someone by addr
