@@ -25,7 +25,7 @@ class DirEntry(dirType: String)(implicit p: Parameters) extends DJBundle with Ha
   override def paramType: String = dirType
   override def addrType : String = dirType
 
-  val way     = UInt(wayBits.W)
+  val wayOH   = UInt(ways.W)
   val hit     = Bool()
   val metaVec = Vec(nrMetas, new ChiState(dirType))
 }

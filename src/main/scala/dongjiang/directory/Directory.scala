@@ -14,8 +14,9 @@ class Directory(implicit p: Parameters) extends DJModule {
    * IO declaration
    */
   val io = IO(new Bundle {
+    val config      = Input(new DJConfigIO())
     // Read from frontends
-    val readVec     = Vec(djparam.nrDirBank, Flipped(Decoupled(new DJBundle with HasAddr with HasDCID {
+    val readVec     = Vec(djparam.nrDirBank, Flipped(Decoupled(new DJBundle with HasAddr with HasDCID with HasPosIndex {
       val early     = Bool() // Early access to data
     })))
     // Resp to frontends
@@ -25,8 +26,8 @@ class Directory(implicit p: Parameters) extends DJModule {
     }))
     // Write From backend
     val write       = new DJBundle {
-      val llc       = Flipped(Decoupled(new DirEntry("llc")))
-      val sf        = Flipped(Decoupled(new DirEntry("sf")))
+      val llc       = Flipped(Decoupled(new DirEntry("llc") with HasPosIndex))
+      val sf        = Flipped(Decoupled(new DirEntry("sf")  with HasPosIndex))
     }
     // Resp to backend
     val wResp       = Output(new DJBundle {
@@ -38,6 +39,8 @@ class Directory(implicit p: Parameters) extends DJModule {
       val set       = UInt(llcSetBits.W)
       val way       = UInt(llcWayBits.W)
     }))
+    // Clean Signal from backend(Replace CM and Commit CM)
+    val unlockVec2  = Vec(djparam.nrDirBank, Vec(2, Flipped(Valid(new PosIndex()))))
   })
 
   /*
@@ -56,6 +59,10 @@ class Directory(implicit p: Parameters) extends DJModule {
   io.write.sf.ready  := DontCare
   llcs.zip(sfs).zipWithIndex.foreach {
     case((llc, sf), i) =>
+      // config
+      llc.io.config         := io.config
+      sf.io.config          := io.config
+
       // read valid
       llc.io.read.valid     := io.readVec(i).valid & sf.io.read.ready
       sf.io.read.valid      := io.readVec(i).valid & llc.io.read.ready
@@ -78,6 +85,10 @@ class Directory(implicit p: Parameters) extends DJModule {
       when(io.write.sf.bits.bankId === i.U) {
         io.write.sf.ready   := sf.io.write.ready
       }
+
+      // Clean Lock Table
+      llc.io.unlockVec.zip(io.unlockVec2(i)).foreach { case(a, b) => a := b }
+      sf.io.unlockVec.zip(io.unlockVec2(i)).foreach  { case(a, b) => a := b }
   }
 
   /*
@@ -98,7 +109,7 @@ class Directory(implicit p: Parameters) extends DJModule {
   // Store DCID
   hitDCIDPipes.zip(io.readVec).foreach {
     case(pipe, read) =>
-      pipe.io.enq.valid       := read.fire
+      pipe.io.enq.valid       := read.fire & read.bits.early
       pipe.io.enq.bits        := read.bits.dcid
   }
 
@@ -118,7 +129,7 @@ class Directory(implicit p: Parameters) extends DJModule {
       io.rHitMesVec(i).valid      := hitDCIDPipes(i).io.deq.valid & llc.io.resp.hit
       io.rHitMesVec(i).bits.dcid  := hitDCIDPipes(i).io.deq.bits
       io.rHitMesVec(i).bits.set   := llc.io.resp.set
-      io.rHitMesVec(i).bits.way   := llc.io.resp.way
+      io.rHitMesVec(i).bits.way   := OHToUInt(llc.io.resp.wayOH)
   }
 
   /*

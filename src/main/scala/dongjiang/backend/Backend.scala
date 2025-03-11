@@ -32,14 +32,16 @@ class Backend(implicit p: Parameters) extends DJModule {
     }))
     // Write Directory
     val writeDir      = new DJBundle {
-      val llc         = Decoupled(new DirEntry("llc"))
-      val sf          = Decoupled(new DirEntry("sf"))
+      val llc         = Decoupled(new DirEntry("llc") with HasPosIndex)
+      val sf          = Decoupled(new DirEntry("sf")  with HasPosIndex)
     }
     // Write Directory Resp
     val respDir       = Input(new DJBundle {
       val llc         = new DirEntry("llc")
       val sf          = new DirEntry("sf")
     })
+    // Clean Signal to Directory
+    val unlockVec2    = Vec(djparam.nrDirBank, Vec(2, Valid(new PosIndex())))
     // Multicore Req running in LAN
     val multicore     = Bool()
   })

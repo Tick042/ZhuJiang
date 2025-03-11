@@ -22,11 +22,11 @@ trait HasAddr extends DJBundle { this: DJBundle =>
   def posSet    = getPosSet(addr)
 
   def catByX(bank: UInt, tag: UInt, tagBits: Int, set: UInt, setBits: Int, dirBank: UInt, offset: UInt = 0.U(offsetBits.W)) = {
-    require(bank.getWidth    == bankBits)
-    require(tag.getWidth     == tagBits)
-    require(set.getWidth     == setBits)
-    require(dirBank.getWidth == dirBankBits)
-    require(offset.getWidth  == offsetBits)
+    require(bank.getWidth    == bankBits,    s"bankBits:    ${bank.getWidth} =/= ${bankBits}")
+    require(tag.getWidth     == tagBits,     s"tagBits:     ${tag.getWidth} =/= ${tagBits}")
+    require(set.getWidth     == setBits,     s"setBits:     ${set.getWidth} =/= ${setBits}")
+    require(dirBank.getWidth == dirBankBits, s"dirBankBits: ${dirBank.getWidth} =/= ${dirBankBits}")
+    require(offset.getWidth  == offsetBits,  s"offsetBits:  ${offset.getWidth} =/= ${offsetBits}")
     val useAddr_ = Cat(tag, set, dirBank)
     val addr_ = Cat(useAddr_(useAddrBits-1, bankId_lo-offsetBits), bank, useAddr_(bankId_lo-offsetBits-1, 0), offset)
     require(addr_.getWidth   == addrBits)

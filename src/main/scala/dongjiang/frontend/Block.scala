@@ -19,7 +19,7 @@ class Block(dirBank: Int)(implicit p: Parameters) extends DJModule {
     val task_s0       = Flipped(Valid(new ChiTask()))
     val task_s1       = Valid(new ChiTask with HasPosIndex with HasDCID)
     // Read Directory
-    val readDir_s1    = Decoupled(new DJBundle with HasAddr with HasDCID {
+    val readDir_s1    = Decoupled(new DJBundle with HasAddr with HasDCID with HasPosIndex {
       val early       = Bool() // Early access to data
     })
     // Req to DataBuffer
@@ -42,7 +42,7 @@ class Block(dirBank: Int)(implicit p: Parameters) extends DJModule {
   /*
    * Reg and Wire declaration
    */
-  val valid_s1        = RegInit(false.B)
+  val validReg_s1     = RegInit(false.B)
   val taskReg_s1      = Reg(new ChiTask())
   val needDBReg_s1    = RegInit(false.B)
   val needRespReg_s1  = RegInit(false.B)
@@ -60,7 +60,7 @@ class Block(dirBank: Int)(implicit p: Parameters) extends DJModule {
   /*
    * Receive Task
    */
-  valid_s1        := io.task_s0.valid
+  validReg_s1     := io.task_s0.valid
   taskReg_s1      := io.task_s0.bits
   needDBReg_s1    := io.task_s0.bits.reqNeedData | io.task_s0.bits.snpNeedData
   needRespReg_s1  := io.task_s0.bits.isWrite | io.task_s0.bits.isEO
@@ -69,7 +69,7 @@ class Block(dirBank: Int)(implicit p: Parameters) extends DJModule {
    * Block logic
    */
   // willUseBufNum = S1 + S2 + IssueBuf already use number
-  val willUseBufNum = (valid_s1 & !block_s1.all) + io.willUseBufNum
+  val willUseBufNum = (validReg_s1 & !block_s1.all) + io.willUseBufNum
   val freeNum       = nrIssueBuf.U - willUseBufNum
   // Reserve an extra entry for the snp task
   needRsvdReg_s1    := Mux(io.task_s0.bits.isSnp, freeNum === 0.U, freeNum <= 1.U)
@@ -79,12 +79,12 @@ class Block(dirBank: Int)(implicit p: Parameters) extends DJModule {
   block_s1.dir      := !io.readDir_s1.ready
   block_s1.db       := needDBReg_s1 & !io.reqDB_s1.ready
   block_s1.resp     := needRespReg_s1 & !io.fastResp_s1.ready
-  io.retry_s1       := valid_s1 & block_s1.all
+  io.retry_s1       := validReg_s1 & block_s1.all
 
   /*
    * Send Req to DataBuffer
    */
-  io.reqDB_s1.valid         := valid_s1 & needDBReg_s1 & !(block_s1.rsvd | block_s1.pos | block_s1.dir | block_s1.resp)
+  io.reqDB_s1.valid         := validReg_s1 & needDBReg_s1 & !(block_s1.rsvd | block_s1.pos | block_s1.dir | block_s1.resp)
   io.reqDB_s1.bits.pos      := io.posIdx_s1
   io.reqDB_s1.bits.dirBank  := dirBank.U
   io.reqDB_s1.bits.double   := taskReg_s1.isFullSize
@@ -92,7 +92,7 @@ class Block(dirBank: Int)(implicit p: Parameters) extends DJModule {
   /*
    * Task Out
    */
-  io.task_s1.valid      := valid_s1 & !block_s1.all
+  io.task_s1.valid      := validReg_s1 & !block_s1.all
   io.task_s1.bits       := taskReg_s1.asUInt.asTypeOf(io.task_s1.bits)
   io.task_s1.bits.pos   := io.posIdx_s1
   io.task_s1.bits.dcid  := io.respDB_s1.dcid
@@ -100,15 +100,16 @@ class Block(dirBank: Int)(implicit p: Parameters) extends DJModule {
   /*
    * Read Directory
    */
-  io.readDir_s1.valid       := valid_s1 & !(block_s1.rsvd | block_s1.pos | block_s1.db | block_s1.resp)
+  io.readDir_s1.valid       := validReg_s1 & !(block_s1.rsvd | block_s1.pos | block_s1.db | block_s1.resp)
   io.readDir_s1.bits.addr   := taskReg_s1.addr
   io.readDir_s1.bits.dcid   := io.respDB_s1.dcid
+  io.readDir_s1.bits.pos    := io.posIdx_s1
   io.readDir_s1.bits.early  := needDBReg_s1
 
   /*
    * Resp to Node
    */
-  io.fastResp_s1.valid        := valid_s1 & needRespReg_s1 & (block_s1.rsvd | block_s1.pos | block_s1.dir | block_s1.db)
+  io.fastResp_s1.valid        := validReg_s1 & needRespReg_s1 & (block_s1.rsvd | block_s1.pos | block_s1.dir | block_s1.db)
   io.fastResp_s1.bits         := DontCare
   io.fastResp_s1.bits.TgtID   := taskReg_s1.nodeId
   io.fastResp_s1.bits.TxnID   := taskReg_s1.txnID

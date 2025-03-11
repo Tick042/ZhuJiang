@@ -107,6 +107,7 @@ class DongJiang(hnNodeSeq: Seq[Node])(implicit p: Parameters) extends DJRawModul
    * Connect Config
    */
   frontends.foreach(_.io.config := io.config)
+  directory.io.config := io.config
 
   /*
    * Connect IO CHI
@@ -170,6 +171,7 @@ class DongJiang(hnNodeSeq: Seq[Node])(implicit p: Parameters) extends DJRawModul
    */
   directory.io.readVec.zip(frontends.map(_.io.readDir_s1)).foreach { case(a, b) => a <> b }
   directory.io.write  <> backend.io.writeDir
+  directory.io.unlockVec2.zipWithIndex.foreach { case(vec, i) => vec.zipWithIndex.foreach { case(a, j) => a := backend.io.unlockVec2(i)(j) } }
 
   /*
    * Connect backend

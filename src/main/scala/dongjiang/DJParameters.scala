@@ -25,8 +25,8 @@ case class DJParam(
                   // Data SRAM
                   nrDSBank:           Int = 4,
                   dataSetup:          Int = 3,
-                  dataLatency:        Int = 3,
                   dataExtraHold:      Boolean = false,
+                  dataLatency:        Int = 3,
                   // ------------------------ Directory  ----------------------- //
                   // Replace Policy is PLRU
                   llcWays:            Int = 16, // self llc ways
@@ -34,8 +34,8 @@ case class DJParam(
                   // Dir SRAM
                   nrDirBank:          Int = 2,
                   dirSetup:           Int = 2,
-                  dirLatency:         Int = 2,
                   dirExtraHold:       Boolean = false,
+                  dirLatency:         Int = 2,
                 ) {
   lazy val hasLLC    = llcSizeInKiB != 0
   lazy val CacheLine = 64 // Bytes
@@ -237,7 +237,8 @@ trait HasDJParam extends HasParseZJParam {
   lazy val nrPoS            = djparam.nrPoS / djparam.nrDirBank
   lazy val posWays          = djparam.posWays
   lazy val posWayBits       = log2Ceil(posWays)
-  lazy val readDirLatency   = djparam.dirSetup + 1 + (if(djparam.dirExtraHold) 1 else 0)
+  lazy val dirMuticycle     = djparam.dirLatency.max(if(djparam.dirExtraHold) djparam.dirSetup + 1 else djparam.dirSetup)
+  lazy val readDirLatency   = (if(djparam.dirExtraHold) djparam.dirSetup + 1 else djparam.dirSetup) + djparam.dirLatency + 1
   lazy val llcWayBits       = log2Ceil(djparam.llcWays)
   // [S0(PoS/Block)] + [S1(ReadDir)] + [S2(Decode)] + Reserve for snp
   lazy val nrIssueBuf       = 8 // TODO: Need to argue for sufficient resources and no deadlocks

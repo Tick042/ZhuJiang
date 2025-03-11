@@ -21,7 +21,7 @@ class Frontend(dirBank: Int)(implicit p: Parameters) extends DJModule {
     val rxReq         = Flipped(Decoupled(new ReqFlit(false)))
     val rxSnp         = Flipped(Decoupled(new SnoopFlit()))
     // DIR Read/Resp
-    val readDir_s1    = Decoupled(new Addr with HasDCID {
+    val readDir_s1    = Decoupled(new DJBundle with HasAddr with HasDCID with HasPosIndex {
       val early       = Bool() // Early access to data
     })
     val respDir_s3    = Input(new DJBundle {
@@ -71,7 +71,7 @@ class Frontend(dirBank: Int)(implicit p: Parameters) extends DJModule {
   // io
   io.readDir_s1             <> block.io.readDir_s1
   io.reqDB_s1               <> block.io.reqDB_s1
-  io.fastResp               <> fastDecoupledQueue(block.io.fastResp_s1)
+  io.fastResp               <> fastDecoupledQueue(block.io.fastResp_s1) // TODO: queue size = nrDirBank
   io.posBusy                := posTable.io.busy
 
   // req2Task
