@@ -46,7 +46,7 @@ class DirectoryBase(dirType: String, dirBank: Int)(implicit p: Parameters) exten
     val config    = Input(new DJConfigIO())
     val read      = Flipped(Decoupled(new Addr(dirType) with HasPosIndex))
     val write     = Flipped(Decoupled(new DirEntry(dirType) with HasPosIndex))
-    val resp      = Output(new DirEntry(dirType))
+    val resp      = Output(new DirEntry(dirType) with HasPosIndex)
     val unlockVec = Vec(2, Flipped(Valid(new PosIndex())))
   })
   dontTouch(io)
@@ -255,10 +255,10 @@ class DirectoryBase(dirType: String, dirBank: Int)(implicit p: Parameters) exten
   io.resp.wayOH   := selWayOH_d2
   io.resp.hit     := hit_d2
   io.resp.metaVec := metaVec_d2(selWay)
+  io.resp.pos     := req_d2.pos
   HardwareAssertion.placePipe(Int.MaxValue-3)
 
   // Update Lock Table
-  // TODO: Size
   lockTable.zipWithIndex.foreach {
     case(lockSet, i) =>
       lockSet.zipWithIndex.foreach {

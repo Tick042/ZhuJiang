@@ -93,13 +93,14 @@ trait HasChiChannel { this: Bundle =>
   def isSnp = channel === ChiChannel.SNP
 }
 
-trait HasChiOrder { this: Bundle =>
-  val order = UInt(Order.width.W)
+trait HasChiOrderAndExpCompAck { this: Bundle =>
+  val order       = UInt(Order.width.W)
+  val expCompAck  = Bool()
 
   def noOrder = order === Order.None
-  def isRO    = order === Order.RequestOrder
+  def isRO    = order === Order.RequestOrder & !expCompAck
   def isEO    = order === Order.EndpointOrder
-  def isOWO   = order === Order.OWO
+  def isOWO   = order === Order.OWO & expCompAck
   def isRA    = order === Order.RequestAccepted
 }
 

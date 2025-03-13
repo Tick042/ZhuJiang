@@ -92,10 +92,7 @@ class ReqToChiTask(implicit p: Parameters) extends DJModule {
     // PCrdType
     // MemAttr
     HardwareAssertion.withEn(task.memAttr.ewa,  task.isCopyBackWrite)
-    HardwareAssertion.withEn(!task.memAttr.ewa, task.isImmediateWrite)
     HardwareAssertion(!task.memAttr.device)
-    HardwareAssertion.withEn(task.memAttr.cacheable,  task.fromCcRnf)
-    HardwareAssertion.withEn(!task.memAttr.cacheable, task.fromCcRni)
     HardwareAssertion.withEn(!task.memAttr.allocate, !task.memAttr.cacheable)
     // SnpAttr
     HardwareAssertion.withEn(task.snpAttr,  task.fromCcRnf)

@@ -160,7 +160,6 @@ class DongJiang(hnNodeSeq: Seq[Node])(implicit p: Parameters) extends DJRawModul
    */
   frontends.zipWithIndex.foreach {
     case(f, i) =>
-      f.io.respDB_s1  := dataCtrl.io.respDBVec(i)
       f.io.respDir_s3 := directory.io.rRespVec(i)
       f.io.updPosTag  := backend.io.updPosTagVec(i)
       f.io.cleanPos   := backend.io.cleanPosVec(i)
@@ -182,7 +181,6 @@ class DongJiang(hnNodeSeq: Seq[Node])(implicit p: Parameters) extends DJRawModul
   /*
    * Connect DataCtrl
    */
-  dataCtrl.io.reqDBVec.zip(frontends.map(_.io.reqDB_s1)).foreach { case(a, b) => a <> b }
   dataCtrl.io.hitMesVec.zip(directory.io.rHitMesVec).foreach     { case(a, b) => a <> b }
 
   /*

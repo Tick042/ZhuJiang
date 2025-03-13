@@ -21,18 +21,13 @@ class Frontend(dirBank: Int)(implicit p: Parameters) extends DJModule {
     val rxReq         = Flipped(Decoupled(new ReqFlit(false)))
     val rxSnp         = Flipped(Decoupled(new SnoopFlit()))
     // DIR Read/Resp
-    val readDir_s1    = Decoupled(new DJBundle with HasAddr with HasDCID with HasPosIndex {
+    val readDir_s1    = Decoupled(new DJBundle with HasAddr with HasPosIndex {
       val early       = Bool() // Early access to data
     })
     val respDir_s3    = Input(new DJBundle {
       val llc         = new DirEntry("llc")
       val sf          = new DirEntry("sf")
     })
-    // DB Req/Resp
-    val reqDB_s1      = Decoupled(new DJBundle with HasLLCTxnID {
-      val double      = Bool()
-    })
-    val respDB_s1     = Input(new DCID())
     // Update PoS Message
     val updPosTag     = Input(Valid(new Addr with HasPosIndex))
     val cleanPos      = Input(Valid(new DJBundle with HasPosIndex {
@@ -70,7 +65,6 @@ class Frontend(dirBank: Int)(implicit p: Parameters) extends DJModule {
 
   // io
   io.readDir_s1             <> block.io.readDir_s1
-  io.reqDB_s1               <> block.io.reqDB_s1
   io.fastResp               <> fastDecoupledQueue(block.io.fastResp_s1) // TODO: queue size = nrDirBank
   io.posBusy                := posTable.io.busy
 
@@ -110,7 +104,6 @@ class Frontend(dirBank: Int)(implicit p: Parameters) extends DJModule {
 
   // block [S1]
   block.io.task_s0          := fastRRArb(Seq(snpTaskBuf.io.task_s0, reqTaskBuf.io.task_s0))
-  block.io.respDB_s1        := io.respDB_s1
   block.io.posRetry_s1      := posTable.io.full_s1 | posTable.io.sleep_s1
   block.io.posIdx_s1        := posTable.io.posIdx_s1
   block.io.willUseBufNum    := 0.U + shiftReg_s2.s.orR // TODO

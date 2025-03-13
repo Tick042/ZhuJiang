@@ -21,6 +21,23 @@ class DirParam(dirType: String)(implicit p: Parameters) extends DJBundle with Ha
   override def paramType: String = dirType
 }
 
+trait HasDirBaseMsg extends DJBundle { this: DJBundle with HasDirParam =>
+  val wayOH   = UInt(ways.W)
+  val hit     = Bool()
+  val metaVec = Vec(nrMetas, new ChiState(paramType))
+}
+
+// Without Addr
+trait HasDirMsg extends DJBundle { this: DJBundle =>
+  val llc = new DJBundle with HasDirParam with HasDirBaseMsg {
+    override def paramType: String = "llc"
+  }
+  val sf  = new DJBundle with HasDirParam with HasDirBaseMsg {
+    override def paramType: String = "sf"
+  }
+}
+
+// With Addr
 class DirEntry(dirType: String)(implicit p: Parameters) extends DJBundle with HasDirParam with HasAddr {
   override def paramType: String = dirType
   override def addrType : String = dirType
@@ -29,3 +46,4 @@ class DirEntry(dirType: String)(implicit p: Parameters) extends DJBundle with Ha
   val hit     = Bool()
   val metaVec = Vec(nrMetas, new ChiState(dirType))
 }
+
