@@ -46,7 +46,7 @@ class DirectoryBase(dirType: String, dirBank: Int)(implicit p: Parameters) exten
     val config    = Input(new DJConfigIO())
     val read      = Flipped(Decoupled(new Addr(dirType) with HasPosIndex))
     val write     = Flipped(Decoupled(new DirEntry(dirType) with HasPosIndex))
-    val resp      = Output(new DirEntry(dirType) with HasPosIndex)
+    val resp      = Valid(new DirEntry(dirType) with HasPosIndex)
     val unlockVec = Vec(2, Flipped(Valid(new PosIndex())))
   })
   dontTouch(io)
@@ -271,17 +271,18 @@ class DirectoryBase(dirType: String, dirBank: Int)(implicit p: Parameters) exten
   ))
 
   // Output Directory Resp
-  val selWay      = OHToUInt(selWayOH_d2)
-  io.resp.addr    := addrVec_d2(selWay).addr
-  io.resp.wayOH   := selWayOH_d2
-  io.resp.hit     := hit_d2
-  io.resp.metaVec := metaVec_d2(selWay)
-  io.resp.pos     := req_d2.pos
+  val selWay            = OHToUInt(selWayOH_d2)
+  io.resp.valid        := shiftReg.outDirResp_d2
+  io.resp.bits.addr    := addrVec_d2(selWay).addr
+  io.resp.bits.wayOH   := selWayOH_d2
+  io.resp.bits.hit     := hit_d2
+  io.resp.bits.metaVec := metaVec_d2(selWay)
+  io.resp.bits.pos     := req_d2.pos
 
   // Special handling of sf
   if (dirType == "sf") {
-    uniqueVec_d2_opt.get  := uniVecReg_d1_opt.get
-    io.resp.uniqueOpt.get := uniqueVec_d2_opt.get(selWay)
+    uniqueVec_d2_opt.get       := uniVecReg_d1_opt.get
+    io.resp.bits.uniqueOpt.get := uniqueVec_d2_opt.get(selWay)
   }
   HardwareAssertion.placePipe(Int.MaxValue-3)
 

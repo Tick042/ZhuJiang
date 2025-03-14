@@ -18,38 +18,41 @@ import chisel3.util._
 
 
 object Dataless {
-  def makeUnique: Seq[(UInt, UInt)] = Seq(
+  def makeUnique: Seq[(UInt, Seq[(UInt, UInt)])] = Seq(
     // LAN
-    // I I I
-    (isReq | toLAN | opIs(MakeUnique) | srcIs(I)  | othIs(I)  | llcIs(I) ) -> nothing,
-    // I I V
-    (isReq | toLAN | opIs(MakeUnique) | srcIs(I)  | othIs(I)  | llcIs(SC)) -> nothing,
-    (isReq | toLAN | opIs(MakeUnique) | srcIs(I)  | othIs(I)  | llcIs(UC)) -> nothing,
-    (isReq | toLAN | opIs(MakeUnique) | srcIs(I)  | othIs(I)  | llcIs(UD)) -> nothing,
-    // I V I
-    (isReq | toLAN | opIs(MakeUnique) | srcIs(I)  | othIs(UD) | llcIs(I) ) -> (snpOth | opcode(SnpMakeInvalid)),
-    (isReq | toLAN | opIs(MakeUnique) | srcIs(I)  | othIs(SC) | llcIs(I) ) -> (snpOth | opcode(SnpMakeInvalid)),
-    // V I I
-    (isReq | toLAN | opIs(MakeUnique) | srcIs(UD) | othIs(I)  | llcIs(I) ) -> error,
-    (isReq | toLAN | opIs(MakeUnique) | srcIs(SC) | othIs(I)  | llcIs(I) ) -> nothing,
-    // V V I
-    (isReq | toLAN | opIs(MakeUnique) | srcIs(SC) | othIs(SC) | llcIs(I) ) -> (snpOth | opcode(SnpMakeInvalid)),
-
+    (isReq | toLAN | opIs(MakeUnique), Seq(
+      // I I I
+      (srcIs(I)  | othIs(I)  | llcIs(I) ) -> nothing,
+      // I I V
+      (srcIs(I)  | othIs(I)  | llcIs(SC)) -> nothing,
+      (srcIs(I)  | othIs(I)  | llcIs(UC)) -> nothing,
+      (srcIs(I)  | othIs(I)  | llcIs(UD)) -> nothing,
+      // I V I
+      (srcIs(I)  | othIs(UD) | llcIs(I) ) -> (snpOth | opcode(SnpMakeInvalid)),
+      (srcIs(I)  | othIs(SC) | llcIs(I) ) -> (snpOth | opcode(SnpMakeInvalid)),
+      // V I I
+      (srcIs(UD) | othIs(I)  | llcIs(I) ) -> error,
+      (srcIs(SC) | othIs(I)  | llcIs(I) ) -> nothing,
+      // V V I
+      (srcIs(SC) | othIs(SC) | llcIs(I) ) -> (snpOth | opcode(SnpMakeInvalid)),
+    )),
     // BBN
-    // I I I
-    (isReq | toBBN | opIs(MakeUnique) | srcIs(I)  | othIs(I)  | llcIs(I) ) -> (dataless | opcode(MakeUnique) | needDB | expCompAck | canBeNest),
-    // I I V
-    (isReq | toBBN | opIs(MakeUnique) | srcIs(I)  | othIs(I)  | llcIs(SC)) -> (dataless | opcode(MakeUnique) | needDB | expCompAck | canBeNest),
-    (isReq | toBBN | opIs(MakeUnique) | srcIs(I)  | othIs(I)  | llcIs(UC)) -> nothing,
-    (isReq | toBBN | opIs(MakeUnique) | srcIs(I)  | othIs(I)  | llcIs(UD)) -> nothing,
-    // I V I
-    (isReq | toBBN | opIs(MakeUnique) | srcIs(I)  | othIs(UD) | llcIs(I) ) -> (snpOth | opcode(SnpMakeInvalid)),
-    (isReq | toBBN | opIs(MakeUnique) | srcIs(I)  | othIs(SC) | llcIs(I) ) -> (dataless | opcode(MakeUnique) | needDB | expCompAck | canBeNest), // Will SnpMakeInvalid(oth) when MakeUnique done without nest
-    // V I I
-    (isReq | toBBN | opIs(MakeUnique) | srcIs(UD) | othIs(I)  | llcIs(I) ) -> error,
-    (isReq | toBBN | opIs(MakeUnique) | srcIs(SC) | othIs(I)  | llcIs(I) ) -> (dataless | opcode(MakeUnique) | needDB | expCompAck | canBeNest),
-    // V V I
-    (isReq | toBBN | opIs(MakeUnique) | srcIs(SC) | othIs(SC) | llcIs(I) ) -> (dataless | opcode(MakeUnique) | needDB | expCompAck | canBeNest), // Will SnpMakeInvalid(oth) when MakeUnique done without nest
+    (isReq | toBBN | opIs(MakeUnique), Seq(
+      // I I I
+      (srcIs(I)  | othIs(I)  | llcIs(I) ) -> (dataless | opcode(MakeUnique) | needDB | expCompAck | canBeNest),
+      // I I V
+      (isReq | toBBN | opIs(MakeUnique) | srcIs(I)  | othIs(I)  | llcIs(SC)) -> (dataless | opcode(MakeUnique) | needDB | expCompAck | canBeNest),
+      (isReq | toBBN | opIs(MakeUnique) | srcIs(I)  | othIs(I)  | llcIs(UC)) -> nothing,
+      (isReq | toBBN | opIs(MakeUnique) | srcIs(I)  | othIs(I)  | llcIs(UD)) -> nothing,
+      // I V I
+      (isReq | toBBN | opIs(MakeUnique) | srcIs(I)  | othIs(UD) | llcIs(I) ) -> (snpOth | opcode(SnpMakeInvalid)),
+      (isReq | toBBN | opIs(MakeUnique) | srcIs(I)  | othIs(SC) | llcIs(I) ) -> (dataless | opcode(MakeUnique) | needDB | expCompAck | canBeNest), // Will SnpMakeInvalid(oth) when MakeUnique done without nest
+      // V I I
+      (isReq | toBBN | opIs(MakeUnique) | srcIs(UD) | othIs(I)  | llcIs(I) ) -> error,
+      (isReq | toBBN | opIs(MakeUnique) | srcIs(SC) | othIs(I)  | llcIs(I) ) -> (dataless | opcode(MakeUnique) | needDB | expCompAck | canBeNest),
+      // V V I
+      (isReq | toBBN | opIs(MakeUnique) | srcIs(SC) | othIs(SC) | llcIs(I) ) -> (dataless | opcode(MakeUnique) | needDB | expCompAck | canBeNest), // Will SnpMakeInvalid(oth) when MakeUnique done without nest
+    ))
   )
 
   def evict: Seq[(UInt, UInt)] = Seq(
@@ -191,5 +194,5 @@ object Dataless {
   )
 
 
-  def table: Seq[(UInt, UInt)] = makeUnique ++ evict ++ cleanShared ++ cleanInvalid ++ makeInvalid
+  def table: Seq[(UInt, Seq[(UInt, UInt)])] = makeUnique // ++ evict ++ cleanShared ++ cleanInvalid ++ makeInvalid
 }

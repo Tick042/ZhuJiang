@@ -20,9 +20,10 @@ class Directory(implicit p: Parameters) extends DJModule {
       val early     = Bool() // Early access to data
     })))
     // Resp to frontends
-    val rRespVec    = Output(Vec(djparam.nrDirBank, new DJBundle {
+    val rRespVec    = Vec(djparam.nrDirBank, Valid(new DJBundle {
       val llc       = new DirEntry("llc") with HasPosIndex
       val sf        = new DirEntry("sf")  with HasPosIndex
+      val alrWriDB  = Bool()
     }))
     // Write From backend
     val write       = new DJBundle {
@@ -30,7 +31,7 @@ class Directory(implicit p: Parameters) extends DJModule {
       val sf        = Flipped(Decoupled(new DirEntry("sf")  with HasPosIndex))
     }
     // Resp to backend
-    val wResp       = Output(new DJBundle {
+    val wResp       = Valid(new DJBundle {
       val llc       = new DirEntry("llc")
       val sf        = new DirEntry("sf")
     })
@@ -95,8 +96,10 @@ class Directory(implicit p: Parameters) extends DJModule {
    * Connect IO
    */
   // Read Resp
-  io.rRespVec.map(_.llc).zip(llcs.map(_.io.resp)).foreach { case(a, b) => a := b }
-  io.rRespVec.map(_.sf ).zip( sfs.map(_.io.resp)).foreach { case(a, b) => a := b }
+  io.rRespVec.map(_.valid).zip(llcs.map(_.io.resp)).foreach    { case(a, b) => a := b.valid }
+  io.rRespVec.map(_.bits.alrWriDB).zip(io.rHitMesVec).foreach  { case(a, b) => a := b.fire }
+  io.rRespVec.map(_.bits.llc).zip(llcs.map(_.io.resp)).foreach { case(a, b) => a := b.bits }
+  io.rRespVec.map(_.bits.sf ).zip( sfs.map(_.io.resp)).foreach { case(a, b) => a := b.bits }
 
   // Store Write LLC Resp DirBank
   wriLLCBankPipe.io.enq.valid := io.write.llc.fire
@@ -110,23 +113,24 @@ class Directory(implicit p: Parameters) extends DJModule {
   earlyShiftRegVec.zip(io.readVec).foreach { case(a, b) => a.input(b.fire & b.bits.early) }
 
   // Output wResp and rHitMesVec
-  io.wResp := DontCare
+  io.wResp <> DontCare
   llcs.zip(sfs).zipWithIndex.foreach {
     case ((llc, sf), i) =>
+      io.wResp.valid      := llc.io.resp.valid
       // LLC wResp
       when(wriLLCBankPipe.io.deq.bits === i.U) {
-        io.wResp.llc  := llc.io.resp
+        io.wResp.bits.llc := llc.io.resp.bits
       }
       // SF wResp
       when(wriSFBankPipe.io.deq.bits === i.U) {
-        io.wResp.sf   := sf.io.resp
+        io.wResp.bits.sf  := sf.io.resp.bits
       }
       // Hit Resp
-      io.rHitMesVec(i).valid        := earlyShiftRegVec(i).isValid & llc.io.resp.hit
-      io.rHitMesVec(i).bits.pos     := llc.io.resp.pos
+      io.rHitMesVec(i).valid        := earlyShiftRegVec(i).isValid & llc.io.resp.bits.hit
+      io.rHitMesVec(i).bits.pos     := llc.io.resp.bits.pos
       io.rHitMesVec(i).bits.dirBank := i.U
-      io.rHitMesVec(i).bits.set     := llc.io.resp.set
-      io.rHitMesVec(i).bits.way     := OHToUInt(llc.io.resp.wayOH)
+      io.rHitMesVec(i).bits.set     := llc.io.resp.bits.set
+      io.rHitMesVec(i).bits.way     := OHToUInt(llc.io.resp.bits.wayOH)
   }
 
   /*

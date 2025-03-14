@@ -24,10 +24,10 @@ class Frontend(dirBank: Int)(implicit p: Parameters) extends DJModule {
     val readDir_s1    = Decoupled(new DJBundle with HasAddr with HasPosIndex {
       val early       = Bool() // Early access to data
     })
-    val respDir_s3    = Input(new DJBundle {
+    val respDir_s3    = Flipped(Valid(new DJBundle {
       val llc         = new DirEntry("llc")
       val sf          = new DirEntry("sf")
-    })
+    }))
     // Update PoS Message
     val updPosTag     = Input(Valid(new Addr with HasPosIndex))
     val cleanPos      = Input(Valid(new DJBundle with HasPosIndex {
@@ -54,6 +54,8 @@ class Frontend(dirBank: Int)(implicit p: Parameters) extends DJModule {
   // S2: Wait Directory Response
   val bufReg_s2   = RegInit(0.U.asTypeOf(block.io.task_s1.bits))
   val shiftReg_s2 = RegInit(0.U.asTypeOf(new Shift(readDirLatency)))
+  // S3: Receive DirResp and Decode
+  val decode      = Module(new Decode())
 
   /*
    * Connect
@@ -97,7 +99,7 @@ class Frontend(dirBank: Int)(implicit p: Parameters) extends DJModule {
   // posTable [S1]
   posTable.io.req_s0        := fastRRArb(Seq(snpTaskBuf.io.req2Pos_s0, reqTaskBuf.io.req2Pos_s0))
   posTable.io.retry_s1      := block.io.retry_s1
-  posTable.io.canNest       := DontCare // TODO
+  posTable.io.canNest       := decode.io.canNest_s3
   posTable.io.updTag        := io.updPosTag
   posTable.io.clean         := io.cleanPos
 
@@ -106,14 +108,17 @@ class Frontend(dirBank: Int)(implicit p: Parameters) extends DJModule {
   block.io.task_s0          := fastRRArb(Seq(snpTaskBuf.io.task_s0, reqTaskBuf.io.task_s0))
   block.io.posRetry_s1      := posTable.io.full_s1 | posTable.io.sleep_s1
   block.io.posIdx_s1        := posTable.io.posIdx_s1
-  block.io.willUseBufNum    := 0.U + shiftReg_s2.s.orR // TODO
+  block.io.willUseBufNum    := 0.U(issueBufBits.W) + shiftReg_s2.s.orR + decode.io.task_s3.valid
 
   // buffer [S2]
   bufReg_s2                 := Mux(block.io.task_s1.valid, block.io.task_s1.bits, bufReg_s2)
   shiftReg_s2.input(block.io.task_s1.valid)
   HardwareAssertion(PopCount(shiftReg_s2.s) <= 1.U)
-  HardwareAssertion(!shiftReg_s2.isValid) // TODO
 
+  // decode [S3]
+  decode.io.task_s2.valid   := shiftReg_s2.isValid
+  decode.io.task_s2.bits    := bufReg_s2
+  decode.io.respDir_s3      := io.respDir_s3
 
 
   /*
