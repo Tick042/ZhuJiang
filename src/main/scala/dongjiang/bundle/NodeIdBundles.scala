@@ -67,18 +67,6 @@ trait HasNodeId { this: DJBundle =>
     this.isLAN := _fromLAN
     this.nodeId  := Mux(_fromLAN, _lan_nodeId, _bbn_nodeId)
   }
-
-  // getLanDirect
-  def getLanDirect(friendsVec: Seq[Seq[UInt]], enAst: Bool = true.B): UInt = {
-    val directVec = Wire(Vec(friendsVec.length, Bool()))
-    friendsVec.zip(directVec).foreach {
-      case(f, d) =>
-        d := f.map { case fid => fid >> lanABits === lanNId }.reduce(_ | _)
-        HardwareAssertion.withEn(PopCount(f.map(_ >> lanABits === lanNId)) <= 1.U, enAst)
-    }
-    HardwareAssertion.withEn(PopCount(directVec) === 1.U, enAst)
-    PriorityEncoder(directVec)
-  }
 }
 
 class NodeId(implicit p: Parameters) extends DJBundle with HasNodeId

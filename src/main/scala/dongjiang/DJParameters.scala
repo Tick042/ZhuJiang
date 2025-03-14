@@ -82,14 +82,13 @@ trait HasParseZJParam extends HasZJParams {
   // Get BBN Nodes
   lazy val bbnC2CNodes      = zjParams.csnRing.filter(_.nodeType == NodeType.C2C)
   lazy val bbnHnxNodes      = zjParams.csnRing.filter(_.nodeType == NodeType.HX)
-  lazy val hasHnx           = zjParams.csnRing.nonEmpty
-  if(hasHnx) {
+  lazy val hasBBN           = zjParams.csnRing.nonEmpty
+  if(hasBBN) {
     require(bbnC2CNodes.nonEmpty)
     require(bbnHnxNodes.length == lanHnfNodes.length)
   }
 
   // Node ID
-  lazy val nrFriendsNodeMax = lanHnfNodes.map(_.friends.length).max
   lazy val nodeIdBits       = zjParams.nodeIdBits
 
   // Bank and Node Number
@@ -101,15 +100,17 @@ trait HasParseZJParam extends HasZJParams {
   lazy val metaIdBits       = log2Ceil(nrSfMetas)
 
   // ICN Number Per Bank
-  lazy val nrLanIcn       = nrHnfPort
-  lazy val nrBbnIcn         = if(hasHnx) 1 else 0
+  lazy val nrLanIcn         = 1
+  lazy val nrBbnIcn         = if(hasBBN) 1 else 0
   lazy val nrIcn            = nrLanIcn + nrBbnIcn
+  lazy val LAN              = 0
+  lazy val BBN              = 1
 
   // temp node id bits
-  val lanNBits = 5
-  val lanABits = 3
-  val bbnIBits = 4
-  val bbnBBits = 4
+  lazy val lanNBits = 5
+  lazy val lanABits = 3
+  lazy val bbnIBits = 4
+  lazy val bbnBBits = 4
 
   /*
    * Check from X node

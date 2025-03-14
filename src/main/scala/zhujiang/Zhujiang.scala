@@ -114,22 +114,12 @@ class Zhujiang(isTop:Boolean = false)(implicit p: Parameters) extends ZJModule w
 
   require(localRing.icnHfs.get.nonEmpty)
   private val hfIcnSeq = localRing.icnHfs.get.sortBy(_.node.hfpId).groupBy(_.node.bankId).toSeq
-  private val hfDef = Definition(new DongJiang(hfIcnSeq.head._2.map(_.node).sortBy(_.hfpId))) // TODO: There's a risk here.
+  private val hfDef = Definition(new DongJiang(hfIcnSeq.head._2.head.node)) // TODO: There's a risk here.
   private val hfDevSeq = hfIcnSeq.map(is => Instance(hfDef))
   for(i <- hfIcnSeq.indices) {
-    for(j <- hfIcnSeq(i)._2.indices) hfDevSeq(i).io.icnVec(j) <> hfIcnSeq(i)._2(j)
-    for(j <- hfIcnSeq(i)._2.indices) hfDevSeq(i).io.config.hnIdVec(j) := hfIcnSeq(i)._2(j).node.nodeId.U
-    for(j <- hfIcnSeq(i)._2.indices) {
-      hfDevSeq(i).io.config.lanFrinedsVec(j).zipWithIndex.foreach {
-        case (v, k) =>
-          if (k < hfIcnSeq(i)._2.map(_.node.friends.map(_.nodeId.U))(j).length) {
-            v := hfIcnSeq(i)._2.map(_.node.friends.map(_.nodeId.U))(j)(k)
-          } else {
-            v := (pow(2, niw).toInt - 1).U
-          }
-      }
-    }
     val bankId = hfIcnSeq(i)._1
+    if(hfIcnSeq(i)._2.length == 2) hfIcnSeq(i)._2.last <> DontCare
+    hfDevSeq(i).io.lan <> hfIcnSeq(i)._2.head
     hfDevSeq(i).io.flushCache.req <> DontCare
     hfDevSeq(i).io.config.closeLLC := false.B
     hfDevSeq(i).io.config.ci := localRing.io_chip

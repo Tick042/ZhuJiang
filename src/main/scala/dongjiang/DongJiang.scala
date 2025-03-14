@@ -19,29 +19,29 @@ import xs.utils.debug.{DomainInfo, HardwareAssertion}
 
 
 class DJConfigIO(implicit p: Parameters) extends DJBundle {
-  val closeLLC      = Input(Bool())
   val ci            = Input(UInt(ciBits.W))
+  val closeLLC      = Input(Bool())
   val bankId        = Input(UInt(bankBits.W))
-  val lanFrinedsVec = Input(Vec(nrLanIcn, Vec(nrFriendsNodeMax, UInt(nodeIdBits.W))))
-  val hnIdVec       = Input(Vec(nrIcn, UInt(nodeIdBits.W)))
 }
 
 @instantiable
-class DongJiang(hnNodeSeq: Seq[Node])(implicit p: Parameters) extends DJRawModule
+class DongJiang(lanNode: Node, bbnNode: Option[Node] = None)(implicit p: Parameters) extends DJRawModule
   with ImplicitClock with ImplicitReset {
   /*
    * IO declaration
    */
   @public val io  = IO(new Bundle {
     // Flush LLC
-    val flushCache = new DJBundle {
-      val req = Input(Valid(UInt(nrCcNode.W)))
-      val ack = Output(UInt(nrBank.W))
+    val flushCache  = new DJBundle {
+      val req       = Input(Valid(UInt(nrCcNode.W)))
+      val ack       = Output(UInt(nrBank.W))
     }
+    val working     = Output(Bool())
     // Configuration
-    val config = new DJConfigIO()
+    val config      = new DJConfigIO()
     // ICN
-    val icnVec = MixedVec(hnNodeSeq.map(n => new DeviceIcnBundle(n)))
+    val lan         = new DeviceIcnBundle(lanNode)
+    val bbnOpt      = if(hasBBN) Some(new DeviceIcnBundle(bbnNode.get)) else None
   })
   @public val reset = IO(Input(AsyncReset()))
   @public val clock = IO(Input(Clock()))
@@ -50,14 +50,23 @@ class DongJiang(hnNodeSeq: Seq[Node])(implicit p: Parameters) extends DJRawModul
 
   // TODO
   io.flushCache.ack := DontCare
+  io.working        := true.B
 
-  require(hnNodeSeq.length == nrLanIcn)
-  if(hasHnx) {
-    hnNodeSeq.init.foreach(a => require(a.nodeType == NodeType.HF))
-    require(hnNodeSeq.last.nodeType == NodeType.HX)
+  /*
+   * Requirement LAN and BBN
+   */
+  var hnNodeSeq = Seq(lanNode)
+  if(hasBBN) {
+    require(bbnNode.nonEmpty)
+    require(bbnNode.get.nodeType == NodeType.HX)
+    hnNodeSeq = hnNodeSeq ++ Seq(bbnNode.get)
   } else {
-    hnNodeSeq.foreach(a => require(a.nodeType == NodeType.HF))
+    require(bbnNode.isEmpty)
   }
+  require(lanNode.nodeType == NodeType.HF)
+  val icnVec  = Wire(MixedVec(hnNodeSeq.map(n => new DeviceIcnBundle(n))))
+  icnVec.head <> io.lan
+  if(hasBBN)  icnVec.last <> io.bbnOpt.get
 
   /*
    * Print message
@@ -113,42 +122,42 @@ class DongJiang(hnNodeSeq: Seq[Node])(implicit p: Parameters) extends DJRawModul
    * Connect IO CHI
    */
   // [frontends].rxReq <-> [ChiXbar] <-> io.chi.rxReq
-  chiXbar.io.rxReq.inVec.zip(io.icnVec.map(_.rx.req.get)).foreach { case(a, b) => a <> b }
+  chiXbar.io.rxReq.inVec.zip(icnVec.map(_.rx.req.get)).foreach { case(a, b) => a <> b }
   chiXbar.io.rxReq.outVec.zip(frontends.map(_.io.rxReq)).foreach { case(a, b) => a <> b }
 
   // [frontends].rxSnp <-> [ChiXbar] <-> io.chi.rxSnp
-  if(hasHnx) {
-    chiXbar.io.rxSnp.in <> io.icnVec.last.rx.snoop.get
+  if(hasBBN) {
+    chiXbar.io.rxSnp.in <> icnVec.last.rx.snoop.get
   } else {
     chiXbar.io.rxSnp.in <> DontCare
   }
   chiXbar.io.rxSnp.outVec.zip(frontends.map(_.io.rxSnp)).foreach { case(a, b) => a <> b }
 
   // [backend].rxRsp <-> io.chi.rxRsp
-  backend.io.rxRspVec.zip(io.icnVec.map(_.rx.resp.get)).foreach { case(a, b) => a <> b }
+  backend.io.rxRspVec.zip(icnVec.map(_.rx.resp.get)).foreach { case(a, b) => a <> b }
 
   // [dataCtrl].rxDat <-> io.chi.rxDat
   // [backend].rxDat  <-- io.chi.rxDat
-  val rxDat = fastArb(io.icnVec.map(_.rx.data.get))
+  val rxDat = fastArb(icnVec.map(_.rx.data.get))
   dataCtrl.io.rxDat      <> rxDat
   backend.io.rxDat.valid := rxDat.fire
   backend.io.rxDat.bits  := rxDat.bits
 
   // [backend].txReq <-> [ChiXbar] <-> io.chi.txReq
   chiXbar.io.txReq.inVec.zip(backend.io.txReqVec).foreach { case (a, b) => a <> b }
-  chiXbar.io.txReq.outVec.zip(io.icnVec.map(_.tx.req.get)).foreach { case (a, b) => a <> b }
+  chiXbar.io.txReq.outVec.zip(icnVec.map(_.tx.req.get)).foreach { case (a, b) => a <> b }
 
   // [backend].txSnp <-> [ChiXbar] <-> io.chi.txSnp
   chiXbar.io.txSnp.inVec.zip(backend.io.txSnpVec).foreach { case (a, b) => a <> b }
-  chiXbar.io.txSnp.outVec.zip(io.icnVec.map(_.tx.snoop.get)).foreach { case (a, b) => a <> b }
+  chiXbar.io.txSnp.outVec.zip(icnVec.map(_.tx.snoop.get)).foreach { case (a, b) => a <> b }
 
   // [backend].txRsp <-> [ChiXbar] <-> io.chi.txRsp
   chiXbar.io.txRsp.inVec.zip(backend.io.txRspVec).foreach { case (a, b) => a <> b }
-  chiXbar.io.txRsp.outVec.zip(io.icnVec.map(_.tx.resp.get)).foreach { case (a, b) => a <> b }
+  chiXbar.io.txRsp.outVec.zip(icnVec.map(_.tx.resp.get)).foreach { case (a, b) => a <> b }
 
   // [dataCtrl].txDat <-> [ChiXbar] <-> io.chi.txDat
   chiXbar.io.txDat.inVec.zip(dataCtrl.io.txDatVec).foreach { case (a, b) => a <> b }
-  chiXbar.io.txDat.outVec.zip(io.icnVec.map(_.tx.data.get)).foreach { case (a, b) => a <> b }
+  chiXbar.io.txDat.outVec.zip(icnVec.map(_.tx.data.get)).foreach { case (a, b) => a <> b }
 
   // Set CBusy in CHIXbar
   // TODO: Need to argue reasonableness

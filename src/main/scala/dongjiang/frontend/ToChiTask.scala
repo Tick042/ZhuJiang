@@ -55,8 +55,6 @@ class ReqToChiTask(implicit p: Parameters) extends DJModule {
   awhen(io.rxReq.valid) {
     // QoS
     // TgtID
-    HardwareAssertion(Mux(task.fromBBN, io.config.hnIdVec.last === req.TgtID, io.config.hnIdVec.last =/= req.TgtID))
-    HardwareAssertion(io.config.hnIdVec.map(_ === req.TgtID).reduce(_ | _))
     // SrcID
     HardwareAssertion.withEn(task.fromCcRnf | task.fromCcRni | task.fromRniDma, task.isLAN)
     HardwareAssertion.withEn(task.bbnCI =/= io.config.ci, task.fromBBN)
@@ -177,7 +175,6 @@ class SnpToChiTask(implicit p: Parameters) extends DJModule {
 awhen(io.rxSnp.valid) {
   // QoS
   // TgtID
-  HardwareAssertion(snp.TgtID === io.config.hnIdVec.last)
   // SrcID
   HardwareAssertion(task.fromBBN)
   HardwareAssertion(task.bbnCI =/= io.config.ci)

@@ -80,7 +80,7 @@ class Frontend(dirBank: Int)(implicit p: Parameters) extends DJModule {
   reqTaskBuf.io.wakeup      := posTable.io.wakeup
 
   // snp2Task and snpTaskBuf [S0]
-  if(hasHnx) {
+  if(hasBBN) {
     // snp2Task
     snp2Task.io.rxSnp       <> io.rxSnp
     // snpTaskBuf [S0]
