@@ -92,6 +92,7 @@ class ReqToChiTask(implicit p: Parameters) extends DJModule {
     HardwareAssertion.withEn(task.memAttr.ewa,  task.isCopyBackWrite)
     HardwareAssertion(!task.memAttr.device)
     HardwareAssertion.withEn(!task.memAttr.allocate, !task.memAttr.cacheable)
+    HardwareAssertion.placePipe(Int.MaxValue-3)
     // SnpAttr
     HardwareAssertion.withEn(task.snpAttr,  task.fromCcRnf)
     HardwareAssertion.withEn(!task.snpAttr, task.fromCcRni)
@@ -119,6 +120,7 @@ class ReqToChiTask(implicit p: Parameters) extends DJModule {
     // StreamID
     // SecSID1
     // RSVDC
+    HardwareAssertion.placePipe(Int.MaxValue-3)
   }
 
   /*

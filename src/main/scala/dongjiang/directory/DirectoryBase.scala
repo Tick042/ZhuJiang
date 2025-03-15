@@ -306,9 +306,9 @@ class DirectoryBase(dirType: String, dirBank: Int)(implicit p: Parameters) exten
           HardwareAssertion(PopCount(Seq(readHitLock, replLock, writeLock, cleanLock0, cleanLock1)) <= 1.U, cf"Lock Table Index[$i][$j]")
           HardwareAssertion.withEn(!lock.valid, readHitLock | replLock | writeLock, cf"Lock Table Index[$i][$j]")
           HardwareAssertion.withEn(lock.valid,  cleanLock0 | cleanLock1, cf"Lock Table Index[$i][$j]")
+          if(j % 4 == 0) HardwareAssertion.placePipe(Int.MaxValue-3)
       }
   }
-  HardwareAssertion.placePipe(Int.MaxValue-3)
 
 
   /*
