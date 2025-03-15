@@ -21,9 +21,11 @@ class Decode(implicit p: Parameters) extends DJModule {
     val respDir_s3  = Flipped(Valid(new DJBundle {
       val llc       = new DirEntry("llc")
       val sf        = new DirEntry("sf")
+      val alrDeqDB  = Bool()
     }))
     val task_s3     = Valid(new ChiTask with HasPosIndex with HasDirMsg {
       val code      = new Code()
+      val alrDeqDB  = Bool()
     })
     val canNest_s3  = Valid(new PosIndex())
   })
@@ -37,7 +39,7 @@ class Decode(implicit p: Parameters) extends DJModule {
    * Decode Table: Seq[(UInt, Seq[(UInt, UInt)])] <=> Seq[(Req, Seq[(State, Code)])] <=> [x, [y, z]]
    * table is a two-dimensional vector of n x m
    */
-  val table     = Dataless.table
+  val table     = Read_DCT_DMT.table ++ Dataless.table
   val n         = table.length
   val m         = table.map(_._2.length).max
   val table_reqVec    = WireInit(VecInit(Seq.fill(n) { 0.U(new ReqInst().getWidth.W) }))
@@ -108,13 +110,16 @@ class Decode(implicit p: Parameters) extends DJModule {
   /*
    * [S3]: Output S3
    */
-  io.task_s3.valid      := validReg_s3
-  io.task_s3.bits       := taskReg_s3.asTypeOf(io.task_s3.bits)
-  io.task_s3.bits.llc   := io.respDir_s3.bits.llc
-  io.task_s3.bits.sf    := io.respDir_s3.bits.sf
-  io.task_s3.bits.code  := code_s3
-  io.canNest_s3.valid   := validReg_s3 & code_s3.canBeNest
-  io.canNest_s3.bits    := taskReg_s3.pos
+  // task_s3
+  io.task_s3.valid          := validReg_s3
+  io.task_s3.bits           := taskReg_s3.asTypeOf(io.task_s3.bits)
+  io.task_s3.bits.llc       := io.respDir_s3.bits.llc
+  io.task_s3.bits.sf        := io.respDir_s3.bits.sf
+  io.task_s3.bits.alrDeqDB  := io.respDir_s3.bits.alrDeqDB
+  io.task_s3.bits.code      := code_s3
+  // canNest_s3
+  io.canNest_s3.valid       := validReg_s3 & code_s3.canNest
+  io.canNest_s3.bits        := taskReg_s3.pos
 
 
   /*

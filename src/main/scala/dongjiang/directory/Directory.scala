@@ -23,7 +23,7 @@ class Directory(implicit p: Parameters) extends DJModule {
     val rRespVec    = Vec(djparam.nrDirBank, Valid(new DJBundle {
       val llc       = new DirEntry("llc") with HasPosIndex
       val sf        = new DirEntry("sf")  with HasPosIndex
-      val alrWriDB  = Bool()
+      val alrDeqDB  = Bool() // Already Req DataBuffer
     }))
     // Write From backend
     val write       = new DJBundle {
@@ -97,7 +97,7 @@ class Directory(implicit p: Parameters) extends DJModule {
    */
   // Read Resp
   io.rRespVec.map(_.valid).zip(llcs.map(_.io.resp)).foreach    { case(a, b) => a := b.valid }
-  io.rRespVec.map(_.bits.alrWriDB).zip(io.rHitMesVec).foreach  { case(a, b) => a := b.fire }
+  io.rRespVec.map(_.bits.alrDeqDB).zip(io.rHitMesVec).foreach  { case(a, b) => a := b.fire }
   io.rRespVec.map(_.bits.llc).zip(llcs.map(_.io.resp)).foreach { case(a, b) => a := b.bits }
   io.rRespVec.map(_.bits.sf ).zip( sfs.map(_.io.resp)).foreach { case(a, b) => a := b.bits }
 

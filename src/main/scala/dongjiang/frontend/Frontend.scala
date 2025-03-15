@@ -27,6 +27,7 @@ class Frontend(dirBank: Int)(implicit p: Parameters) extends DJModule {
     val respDir_s3    = Flipped(Valid(new DJBundle {
       val llc         = new DirEntry("llc")
       val sf          = new DirEntry("sf")
+      val alrDeqDB    = Bool()
     }))
     // Update PoS Message
     val updPosTag     = Input(Valid(new Addr with HasPosIndex))

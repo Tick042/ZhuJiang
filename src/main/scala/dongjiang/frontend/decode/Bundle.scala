@@ -50,7 +50,7 @@ trait HasCodes { this: Bundle with HasOperations =>
   val opcode      = UInt(ReqOpcode.width.max(SnpOpcode.width).W)
   val needDB      = Bool()
   val expCompAck  = Bool()
-  val canBeNest   = Bool()
+  val canNest     = Bool()
   val nothing     = Bool()
 }
 
@@ -93,7 +93,7 @@ object Code {
   def opcode  (x: UInt) : UInt = { val temp = WireInit(0.U.asTypeOf(new Code())); temp.opcode     := true.B;  temp.asUInt }
   def needDB            : UInt = { val temp = WireInit(0.U.asTypeOf(new Code())); temp.needDB     := true.B;  temp.asUInt }
   def expCompAck        : UInt = { val temp = WireInit(0.U.asTypeOf(new Code())); temp.expCompAck := true.B;  temp.asUInt }
-  def canBeNest         : UInt = { val temp = WireInit(0.U.asTypeOf(new Code())); temp.canBeNest  := true.B;  temp.asUInt }
+  def canNest           : UInt = { val temp = WireInit(0.U.asTypeOf(new Code())); temp.canNest    := true.B;  temp.asUInt }
   def nothing           : UInt = { val temp = WireInit(0.U.asTypeOf(new Code())); temp.nothing    := true.B;  temp.asUInt }
   def error             : UInt = { val temp = WireInit(0.U.asTypeOf(new Code()));                             temp.asUInt }
 }

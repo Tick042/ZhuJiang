@@ -39,19 +39,19 @@ object Dataless {
     // BBN
     (isReq | toBBN | opIs(MakeUnique), Seq(
       // I I I
-      (srcIs(I)  | othIs(I)  | llcIs(I) ) -> (dataless | opcode(MakeUnique) | needDB | expCompAck | canBeNest),
+      (srcIs(I)  | othIs(I)  | llcIs(I) ) -> (dataless | opcode(MakeUnique) | needDB | expCompAck | canNest),
       // I I V
-      (isReq | toBBN | opIs(MakeUnique) | srcIs(I)  | othIs(I)  | llcIs(SC)) -> (dataless | opcode(MakeUnique) | needDB | expCompAck | canBeNest),
+      (isReq | toBBN | opIs(MakeUnique) | srcIs(I)  | othIs(I)  | llcIs(SC)) -> (dataless | opcode(MakeUnique) | needDB | expCompAck | canNest),
       (isReq | toBBN | opIs(MakeUnique) | srcIs(I)  | othIs(I)  | llcIs(UC)) -> nothing,
       (isReq | toBBN | opIs(MakeUnique) | srcIs(I)  | othIs(I)  | llcIs(UD)) -> nothing,
       // I V I
       (isReq | toBBN | opIs(MakeUnique) | srcIs(I)  | othIs(UD) | llcIs(I) ) -> (snpOth | opcode(SnpMakeInvalid)),
-      (isReq | toBBN | opIs(MakeUnique) | srcIs(I)  | othIs(SC) | llcIs(I) ) -> (dataless | opcode(MakeUnique) | needDB | expCompAck | canBeNest), // Will SnpMakeInvalid(oth) when MakeUnique done without nest
+      (isReq | toBBN | opIs(MakeUnique) | srcIs(I)  | othIs(SC) | llcIs(I) ) -> (dataless | opcode(MakeUnique) | needDB | expCompAck | canNest), // Will SnpMakeInvalid(oth) when MakeUnique done without nest
       // V I I
       (isReq | toBBN | opIs(MakeUnique) | srcIs(UD) | othIs(I)  | llcIs(I) ) -> error,
-      (isReq | toBBN | opIs(MakeUnique) | srcIs(SC) | othIs(I)  | llcIs(I) ) -> (dataless | opcode(MakeUnique) | needDB | expCompAck | canBeNest),
+      (isReq | toBBN | opIs(MakeUnique) | srcIs(SC) | othIs(I)  | llcIs(I) ) -> (dataless | opcode(MakeUnique) | needDB | expCompAck | canNest),
       // V V I
-      (isReq | toBBN | opIs(MakeUnique) | srcIs(SC) | othIs(SC) | llcIs(I) ) -> (dataless | opcode(MakeUnique) | needDB | expCompAck | canBeNest), // Will SnpMakeInvalid(oth) when MakeUnique done without nest
+      (isReq | toBBN | opIs(MakeUnique) | srcIs(SC) | othIs(SC) | llcIs(I) ) -> (dataless | opcode(MakeUnique) | needDB | expCompAck | canNest), // Will SnpMakeInvalid(oth) when MakeUnique done without nest
     ))
   )
 
@@ -108,16 +108,16 @@ object Dataless {
 
     // BBN
     // I I I
-    (isReq | toBBN | opIs(CleanShared) | srcIs(I)  | othIs(I)  | llcIs(I) ) -> (dataless | opcode(CleanShared) | canBeNest),
+    (isReq | toBBN | opIs(CleanShared) | srcIs(I)  | othIs(I)  | llcIs(I) ) -> (dataless | opcode(CleanShared) | canNest),
     // I I V
     (isReq | toBBN | opIs(CleanShared) | srcIs(I)  | othIs(I)  | llcIs(SC)) -> nothing,
     (isReq | toBBN | opIs(CleanShared) | srcIs(I)  | othIs(I)  | llcIs(UC)) -> nothing,
-    (isReq | toBBN | opIs(CleanShared) | srcIs(I)  | othIs(I)  | llcIs(UD)) -> (dataless | opcode(CleanShared) | canBeNest),
+    (isReq | toBBN | opIs(CleanShared) | srcIs(I)  | othIs(I)  | llcIs(UD)) -> (dataless | opcode(CleanShared) | canNest),
     // I V I
-    (isReq | toBBN | opIs(CleanShared) | srcIs(I)  | othIs(UD) | llcIs(I) ) -> (dataless | opcode(CleanShared) | canBeNest),
+    (isReq | toBBN | opIs(CleanShared) | srcIs(I)  | othIs(UD) | llcIs(I) ) -> (dataless | opcode(CleanShared) | canNest),
     (isReq | toBBN | opIs(CleanShared) | srcIs(I)  | othIs(SC) | llcIs(I) ) -> nothing,
     // V I I
-    (isReq | toBBN | opIs(CleanShared) | srcIs(UD) | othIs(I)  | llcIs(I) ) -> (dataless | opcode(CleanShared) | canBeNest),
+    (isReq | toBBN | opIs(CleanShared) | srcIs(UD) | othIs(I)  | llcIs(I) ) -> (dataless | opcode(CleanShared) | canNest),
     (isReq | toBBN | opIs(CleanShared) | srcIs(SC) | othIs(I)  | llcIs(I) ) -> nothing,
     // V V I
     (isReq | toBBN | opIs(CleanShared) | srcIs(SC) | othIs(SC) | llcIs(I) ) -> nothing,
@@ -143,19 +143,19 @@ object Dataless {
 
     // BBN
     // I I I
-    (isReq | toBBN | opIs(CleanInvalid) | srcIs(I)  | othIs(I)  | llcIs(I) ) -> (dataless | opcode(CleanInvalid) | canBeNest),
+    (isReq | toBBN | opIs(CleanInvalid) | srcIs(I)  | othIs(I)  | llcIs(I) ) -> (dataless | opcode(CleanInvalid) | canNest),
     // I I V
-    (isReq | toBBN | opIs(CleanInvalid) | srcIs(I)  | othIs(I)  | llcIs(SC)) -> (dataless | opcode(CleanInvalid) | canBeNest),
-    (isReq | toBBN | opIs(CleanInvalid) | srcIs(I)  | othIs(I)  | llcIs(UC)) -> (dataless | opcode(CleanInvalid) | canBeNest),
-    (isReq | toBBN | opIs(CleanInvalid) | srcIs(I)  | othIs(I)  | llcIs(UD)) -> (dataless | opcode(CleanInvalid) | canBeNest),
+    (isReq | toBBN | opIs(CleanInvalid) | srcIs(I)  | othIs(I)  | llcIs(SC)) -> (dataless | opcode(CleanInvalid) | canNest),
+    (isReq | toBBN | opIs(CleanInvalid) | srcIs(I)  | othIs(I)  | llcIs(UC)) -> (dataless | opcode(CleanInvalid) | canNest),
+    (isReq | toBBN | opIs(CleanInvalid) | srcIs(I)  | othIs(I)  | llcIs(UD)) -> (dataless | opcode(CleanInvalid) | canNest),
     // I V I
-    (isReq | toBBN | opIs(CleanInvalid) | srcIs(I)  | othIs(UD) | llcIs(I) ) -> (dataless | opcode(CleanInvalid) | canBeNest),
-    (isReq | toBBN | opIs(CleanInvalid) | srcIs(I)  | othIs(SC) | llcIs(I) ) -> (dataless | opcode(CleanInvalid) | canBeNest),
+    (isReq | toBBN | opIs(CleanInvalid) | srcIs(I)  | othIs(UD) | llcIs(I) ) -> (dataless | opcode(CleanInvalid) | canNest),
+    (isReq | toBBN | opIs(CleanInvalid) | srcIs(I)  | othIs(SC) | llcIs(I) ) -> (dataless | opcode(CleanInvalid) | canNest),
     // V I I
-    (isReq | toBBN | opIs(CleanInvalid) | srcIs(UD) | othIs(I)  | llcIs(I) ) -> (dataless | opcode(CleanInvalid) | canBeNest),
-    (isReq | toBBN | opIs(CleanInvalid) | srcIs(SC) | othIs(I)  | llcIs(I) ) -> (dataless | opcode(CleanInvalid) | canBeNest),
+    (isReq | toBBN | opIs(CleanInvalid) | srcIs(UD) | othIs(I)  | llcIs(I) ) -> (dataless | opcode(CleanInvalid) | canNest),
+    (isReq | toBBN | opIs(CleanInvalid) | srcIs(SC) | othIs(I)  | llcIs(I) ) -> (dataless | opcode(CleanInvalid) | canNest),
     // V V I
-    (isReq | toBBN | opIs(CleanInvalid) | srcIs(SC) | othIs(SC) | llcIs(I) ) -> (dataless | opcode(CleanInvalid) | canBeNest),
+    (isReq | toBBN | opIs(CleanInvalid) | srcIs(SC) | othIs(SC) | llcIs(I) ) -> (dataless | opcode(CleanInvalid) | canNest),
   )
 
 
@@ -178,19 +178,19 @@ object Dataless {
 
     // BBN
     // I I I
-    (isReq | toBBN | opIs(MakeInvalid) | srcIs(I)  | othIs(I)  | llcIs(I) ) -> (dataless | opcode(CleanInvalid) | canBeNest),
+    (isReq | toBBN | opIs(MakeInvalid) | srcIs(I)  | othIs(I)  | llcIs(I) ) -> (dataless | opcode(CleanInvalid) | canNest),
     // I I V
-    (isReq | toBBN | opIs(MakeInvalid) | srcIs(I)  | othIs(I)  | llcIs(SC)) -> (dataless | opcode(CleanInvalid) | canBeNest),
-    (isReq | toBBN | opIs(MakeInvalid) | srcIs(I)  | othIs(I)  | llcIs(UC)) -> (dataless | opcode(CleanInvalid) | canBeNest),
-    (isReq | toBBN | opIs(MakeInvalid) | srcIs(I)  | othIs(I)  | llcIs(UD)) -> (dataless | opcode(CleanInvalid) | canBeNest),
+    (isReq | toBBN | opIs(MakeInvalid) | srcIs(I)  | othIs(I)  | llcIs(SC)) -> (dataless | opcode(CleanInvalid) | canNest),
+    (isReq | toBBN | opIs(MakeInvalid) | srcIs(I)  | othIs(I)  | llcIs(UC)) -> (dataless | opcode(CleanInvalid) | canNest),
+    (isReq | toBBN | opIs(MakeInvalid) | srcIs(I)  | othIs(I)  | llcIs(UD)) -> (dataless | opcode(CleanInvalid) | canNest),
     // I V I
-    (isReq | toBBN | opIs(MakeInvalid) | srcIs(I)  | othIs(UD) | llcIs(I) ) -> (dataless | opcode(CleanInvalid) | canBeNest),
-    (isReq | toBBN | opIs(MakeInvalid) | srcIs(I)  | othIs(SC) | llcIs(I) ) -> (dataless | opcode(CleanInvalid) | canBeNest),
+    (isReq | toBBN | opIs(MakeInvalid) | srcIs(I)  | othIs(UD) | llcIs(I) ) -> (dataless | opcode(CleanInvalid) | canNest),
+    (isReq | toBBN | opIs(MakeInvalid) | srcIs(I)  | othIs(SC) | llcIs(I) ) -> (dataless | opcode(CleanInvalid) | canNest),
     // V I I
-    (isReq | toBBN | opIs(MakeInvalid) | srcIs(UD) | othIs(I)  | llcIs(I) ) -> (dataless | opcode(CleanInvalid) | canBeNest),
-    (isReq | toBBN | opIs(MakeInvalid) | srcIs(SC) | othIs(I)  | llcIs(I) ) -> (dataless | opcode(CleanInvalid) | canBeNest),
+    (isReq | toBBN | opIs(MakeInvalid) | srcIs(UD) | othIs(I)  | llcIs(I) ) -> (dataless | opcode(CleanInvalid) | canNest),
+    (isReq | toBBN | opIs(MakeInvalid) | srcIs(SC) | othIs(I)  | llcIs(I) ) -> (dataless | opcode(CleanInvalid) | canNest),
     // V V I
-    (isReq | toBBN | opIs(MakeInvalid) | srcIs(SC) | othIs(SC) | llcIs(I) ) -> (dataless | opcode(CleanInvalid) | canBeNest),
+    (isReq | toBBN | opIs(MakeInvalid) | srcIs(SC) | othIs(SC) | llcIs(I) ) -> (dataless | opcode(CleanInvalid) | canNest),
   )
 
 

@@ -23,38 +23,41 @@ object Read_DCT_DMT {
     (isReq | toLAN | opIs(ReadNoSnp))                 -> (read | opcode(ReadNoSnp) | needDB),
   )
 
-  def readNotSharedDirty: Seq[(UInt, UInt)] = Seq(
+  def readNotSharedDirty: Seq[(UInt, Seq[(UInt, UInt)])] = Seq(
     // LAN
+    (isReq | toLAN | opIs(ReadNotSharedDirty), Seq(
     // I I I
-    (isReq | toLAN | opIs(ReadNotSharedDirty) | srcIs(I)  | othIs(I)  | llcIs(I)  | reqExpCompAck) -> (read | opcode(ReadNoSnp)),
-    // I I V
-    (isReq | toLAN | opIs(ReadNotSharedDirty) | srcIs(I)  | othIs(I)  | llcIs(SC) | reqExpCompAck) -> nothing,
-    (isReq | toLAN | opIs(ReadNotSharedDirty) | srcIs(I)  | othIs(I)  | llcIs(UC) | reqExpCompAck) -> nothing,
-    (isReq | toLAN | opIs(ReadNotSharedDirty) | srcIs(I)  | othIs(I)  | llcIs(UD) | reqExpCompAck) -> nothing,
-    // I V I
-    (isReq | toLAN | opIs(ReadNotSharedDirty) | srcIs(I)  | othIs(UD) | llcIs(I)  | reqExpCompAck) -> (snpOne | opcode(SnpNotSharedDirtyFwd) | needDB),
-    (isReq | toLAN | opIs(ReadNotSharedDirty) | srcIs(I)  | othIs(SC) | llcIs(I)  | reqExpCompAck) -> (snpOne | opcode(SnpNotSharedDirtyFwd) | needDB),
-    // V I I
-    (isReq | toLAN | opIs(ReadNotSharedDirty) | srcIs(UD) | othIs(I)  | llcIs(I)  | reqExpCompAck) -> error,
-    (isReq | toLAN | opIs(ReadNotSharedDirty) | srcIs(SC) | othIs(I)  | llcIs(I)  | reqExpCompAck) -> error,
-    // V V I
-    (isReq | toLAN | opIs(ReadNotSharedDirty) | srcIs(SC) | othIs(SC) | llcIs(I)  | reqExpCompAck) -> error,
-
+      (srcIs(I)  | othIs(I)  | llcIs(I)  | reqExpCompAck) -> (read | opcode(ReadNoSnp)),
+      // I I V
+      (srcIs(I)  | othIs(I)  | llcIs(SC) | reqExpCompAck) -> nothing,
+      (srcIs(I)  | othIs(I)  | llcIs(UC) | reqExpCompAck) -> nothing,
+      (srcIs(I)  | othIs(I)  | llcIs(UD) | reqExpCompAck) -> nothing,
+      // I V I
+      (srcIs(I)  | othIs(UD) | llcIs(I)  | reqExpCompAck) -> (snpOne | opcode(SnpNotSharedDirtyFwd) | needDB),
+      (srcIs(I)  | othIs(SC) | llcIs(I)  | reqExpCompAck) -> (snpOne | opcode(SnpNotSharedDirtyFwd) | needDB),
+      // V I I
+      (srcIs(UD) | othIs(I)  | llcIs(I)  | reqExpCompAck) -> error,
+      (srcIs(SC) | othIs(I)  | llcIs(I)  | reqExpCompAck) -> error,
+      // V V I
+      (srcIs(SC) | othIs(SC) | llcIs(I)  | reqExpCompAck) -> error,
+    )),
     // BBN
-    // I I I
-    (isReq | toBBN | opIs(ReadNotSharedDirty) | srcIs(I)  | othIs(I)  | llcIs(I)  | reqExpCompAck) -> (read | opcode(ReadNotSharedDirty) | needDB | expCompAck | canBeNest),
-    // I I V
-    (isReq | toBBN | opIs(ReadNotSharedDirty) | srcIs(I)  | othIs(I)  | llcIs(SC) | reqExpCompAck) -> nothing,
-    (isReq | toBBN | opIs(ReadNotSharedDirty) | srcIs(I)  | othIs(I)  | llcIs(UC) | reqExpCompAck) -> nothing,
-    (isReq | toBBN | opIs(ReadNotSharedDirty) | srcIs(I)  | othIs(I)  | llcIs(UD) | reqExpCompAck) -> nothing,
-    // I V I
-    (isReq | toBBN | opIs(ReadNotSharedDirty) | srcIs(I)  | othIs(UD) | llcIs(I)  | reqExpCompAck) -> (snpOne | opcode(SnpNotSharedDirtyFwd) | needDB),
-    (isReq | toBBN | opIs(ReadNotSharedDirty) | srcIs(I)  | othIs(SC) | llcIs(I)  | reqExpCompAck) -> (snpOne | opcode(SnpNotSharedDirtyFwd) | needDB),
-    // V I I
-    (isReq | toBBN | opIs(ReadNotSharedDirty) | srcIs(UD) | othIs(I)  | llcIs(I)  | reqExpCompAck) -> error,
-    (isReq | toBBN | opIs(ReadNotSharedDirty) | srcIs(SC) | othIs(I)  | llcIs(I)  | reqExpCompAck) -> error,
-    // V V I
-    (isReq | toBBN | opIs(ReadNotSharedDirty) | srcIs(SC) | othIs(SC) | llcIs(I)  | reqExpCompAck) -> error,
+    (isReq | toBBN | opIs(ReadNotSharedDirty), Seq(
+      // I I I
+      (srcIs(I)  | othIs(I)  | llcIs(I)  | reqExpCompAck) -> (read | opcode(ReadNotSharedDirty) | needDB | expCompAck | canNest),
+      // I I V
+      (srcIs(I)  | othIs(I)  | llcIs(SC) | reqExpCompAck) -> nothing,
+      (srcIs(I)  | othIs(I)  | llcIs(UC) | reqExpCompAck) -> nothing,
+      (srcIs(I)  | othIs(I)  | llcIs(UD) | reqExpCompAck) -> nothing,
+      // I V I
+      (srcIs(I)  | othIs(UD) | llcIs(I)  | reqExpCompAck) -> (snpOne | opcode(SnpNotSharedDirtyFwd) | needDB),
+      (srcIs(I)  | othIs(SC) | llcIs(I)  | reqExpCompAck) -> (snpOne | opcode(SnpNotSharedDirtyFwd) | needDB),
+      // V I I
+      (srcIs(UD) | othIs(I)  | llcIs(I)  | reqExpCompAck) -> error,
+      (srcIs(SC) | othIs(I)  | llcIs(I)  | reqExpCompAck) -> error,
+      // V V I
+      (srcIs(SC) | othIs(SC) | llcIs(I)  | reqExpCompAck) -> error,
+    )),
   )
 
   def readUnique: Seq[(UInt, UInt)] = Seq(
@@ -76,19 +79,19 @@ object Read_DCT_DMT {
 
     // BBN
     // I I I
-    (isReq | toBBN | opIs(ReadUnique) | srcIs(I)  | othIs(I)  | llcIs(I)  | reqExpCompAck) -> (read | opcode(ReadUnique) | needDB | expCompAck | canBeNest),
+    (isReq | toBBN | opIs(ReadUnique) | srcIs(I)  | othIs(I)  | llcIs(I)  | reqExpCompAck) -> (read | opcode(ReadUnique) | needDB | expCompAck | canNest),
     // I I V
-    (isReq | toBBN | opIs(ReadUnique) | srcIs(I)  | othIs(I)  | llcIs(SC) | reqExpCompAck) -> (read | opcode(MakeReadUnique) | needDB | expCompAck | canBeNest),
+    (isReq | toBBN | opIs(ReadUnique) | srcIs(I)  | othIs(I)  | llcIs(SC) | reqExpCompAck) -> (read | opcode(MakeReadUnique) | needDB | expCompAck | canNest),
     (isReq | toBBN | opIs(ReadUnique) | srcIs(I)  | othIs(I)  | llcIs(UC) | reqExpCompAck) -> nothing,
     (isReq | toBBN | opIs(ReadUnique) | srcIs(I)  | othIs(I)  | llcIs(UD) | reqExpCompAck) -> nothing,
     // I V I
     (isReq | toBBN | opIs(ReadUnique) | srcIs(I)  | othIs(UD) | llcIs(I)  | reqExpCompAck) -> (snpOth | opcode(SnpUniqueFwd) | needDB),
-    (isReq | toBBN | opIs(ReadUnique) | srcIs(I)  | othIs(SC) | llcIs(I)  | reqExpCompAck) -> (read | opcode(MakeReadUnique) | needDB | expCompAck | canBeNest), // Will SnpUniqueFwd(oth) when MakeReadUnique done without nest
+    (isReq | toBBN | opIs(ReadUnique) | srcIs(I)  | othIs(SC) | llcIs(I)  | reqExpCompAck) -> (read | opcode(MakeReadUnique) | needDB | expCompAck | canNest), // Will SnpUniqueFwd(oth) when MakeReadUnique done without nest
     // V I I
     (isReq | toBBN | opIs(ReadUnique) | srcIs(UD) | othIs(I)  | llcIs(I)  | reqExpCompAck) -> error,
-    (isReq | toBBN | opIs(ReadUnique) | srcIs(SC) | othIs(I)  | llcIs(I)  | reqExpCompAck) -> (read | opcode(MakeReadUnique) | needDB | expCompAck | canBeNest),
+    (isReq | toBBN | opIs(ReadUnique) | srcIs(SC) | othIs(I)  | llcIs(I)  | reqExpCompAck) -> (read | opcode(MakeReadUnique) | needDB | expCompAck | canNest),
     // V V I
-    (isReq | toBBN | opIs(ReadUnique) | srcIs(SC) | othIs(SC) | llcIs(I)  | reqExpCompAck) -> (read | opcode(MakeReadUnique) | needDB | expCompAck | canBeNest), // Will SnpMakeInvalid(oth) when MakeReadUnique done without nest
+    (isReq | toBBN | opIs(ReadUnique) | srcIs(SC) | othIs(SC) | llcIs(I)  | reqExpCompAck) -> (read | opcode(MakeReadUnique) | needDB | expCompAck | canNest), // Will SnpMakeInvalid(oth) when MakeReadUnique done without nest
   )
 
   def makeReadUnique: Seq[(UInt, UInt)] = Seq(
@@ -110,20 +113,20 @@ object Read_DCT_DMT {
 
     // BBN
     // I I I
-    (isReq | toBBN | opIs(MakeReadUnique) | srcIs(I)  | othIs(I)  | llcIs(I)  | reqExpCompAck) -> (read | opcode(MakeReadUnique) | needDB | expCompAck | canBeNest),
+    (isReq | toBBN | opIs(MakeReadUnique) | srcIs(I)  | othIs(I)  | llcIs(I)  | reqExpCompAck) -> (read | opcode(MakeReadUnique) | needDB | expCompAck | canNest),
     // I I V
-    (isReq | toBBN | opIs(MakeReadUnique) | srcIs(I)  | othIs(I)  | llcIs(SC) | reqExpCompAck) -> (read | opcode(MakeReadUnique) | needDB | expCompAck | canBeNest),
+    (isReq | toBBN | opIs(MakeReadUnique) | srcIs(I)  | othIs(I)  | llcIs(SC) | reqExpCompAck) -> (read | opcode(MakeReadUnique) | needDB | expCompAck | canNest),
     (isReq | toBBN | opIs(MakeReadUnique) | srcIs(I)  | othIs(I)  | llcIs(UC) | reqExpCompAck) -> nothing,
     (isReq | toBBN | opIs(MakeReadUnique) | srcIs(I)  | othIs(I)  | llcIs(UD) | reqExpCompAck) -> nothing,
     // I V I
     (isReq | toBBN | opIs(MakeReadUnique) | srcIs(I)  | othIs(UD) | llcIs(I)  | reqExpCompAck) -> (snpOth | opcode(SnpUniqueFwd) | needDB),
-    (isReq | toBBN | opIs(MakeReadUnique) | srcIs(I)  | othIs(SC) | llcIs(I)  | reqExpCompAck) -> (read | opcode(MakeReadUnique) | needDB | expCompAck | canBeNest), // Will SnpUniqueFwd(oth) when MakeReadUnique done without nest
+    (isReq | toBBN | opIs(MakeReadUnique) | srcIs(I)  | othIs(SC) | llcIs(I)  | reqExpCompAck) -> (read | opcode(MakeReadUnique) | needDB | expCompAck | canNest), // Will SnpUniqueFwd(oth) when MakeReadUnique done without nest
     // V I I
     (isReq | toBBN | opIs(MakeReadUnique) | srcIs(UD) | othIs(I)  | llcIs(I)  | reqExpCompAck) -> error,
-    (isReq | toBBN | opIs(MakeReadUnique) | srcIs(SC) | othIs(I)  | llcIs(I)  | reqExpCompAck) -> (read | opcode(MakeReadUnique) | needDB | expCompAck | canBeNest),
+    (isReq | toBBN | opIs(MakeReadUnique) | srcIs(SC) | othIs(I)  | llcIs(I)  | reqExpCompAck) -> (read | opcode(MakeReadUnique) | needDB | expCompAck | canNest),
     // V V I
-    (isReq | toBBN | opIs(MakeReadUnique) | srcIs(SC) | othIs(SC) | llcIs(I)  | reqExpCompAck) -> (read | opcode(MakeReadUnique) | needDB  | expCompAck | canBeNest), // Will SnpMakeInvalid(oth) when MakeReadUnique done without nest
+    (isReq | toBBN | opIs(MakeReadUnique) | srcIs(SC) | othIs(SC) | llcIs(I)  | reqExpCompAck) -> (read | opcode(MakeReadUnique) | needDB  | expCompAck | canNest), // Will SnpMakeInvalid(oth) when MakeReadUnique done without nest
   )
   
-  def table: Seq[(UInt, UInt)] = readNoSnp ++ readNotSharedDirty ++ readUnique ++ makeReadUnique
+  def table: Seq[(UInt, Seq[(UInt, UInt)])] = readNotSharedDirty // readNoSnp ++ readNotSharedDirty ++ readUnique ++ makeReadUnique
 }
