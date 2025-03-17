@@ -4,129 +4,174 @@ import dongjiang._
 import dongjiang.frontend._
 import dongjiang.frontend.decode.Inst._
 import dongjiang.frontend.decode.Code._
+import dongjiang.frontend.decode.DecodeCHI._
 import dongjiang.bundle._
-import dongjiang.bundle.ChiState._
 import dongjiang.bundle.ChiChannel._
 import zhujiang.chi.ReqOpcode._
 import zhujiang.chi.RspOpcode._
 import zhujiang.chi.DatOpcode._
 import zhujiang.chi.SnpOpcode._
 import zhujiang.chi._
-import dongjiang.bundle.ChiState._
 import chisel3._
 import chisel3.util._
 
 
+
 object Read_DCT_DMT {
-  def readNoSnp: Seq[(UInt, UInt)] = Seq(
-    (isReq | toLAN | opIs(ReadNoSnp) | reqExpCompAck) -> (read | opcode(ReadNoSnp)),
-    (isReq | toLAN | opIs(ReadNoSnp))                 -> (read | opcode(ReadNoSnp) | needDB),
-  )
+//  def readNoSnp: Seq[(UInt, UInt)] = Seq(
+//    (isReq | toLAN | opIs(ReadNoSnp) | reqExpCompAck) -> (read | opcode(ReadNoSnp)),
+//    (isReq | toLAN | opIs(ReadNoSnp))                 -> (read | opcode(ReadNoSnp) | needDB),
+//  )
 
-  def readNotSharedDirty: Seq[(UInt, Seq[(UInt, UInt)])] = Seq(
-    // LAN
-    (isReq | toLAN | opIs(ReadNotSharedDirty), Seq(
+  // ReadNotSharedDirty To LAN
+  // TODO: SnpXFwd to SC
+  def readNotSharedDirty_lan: (UInt, Seq[(UInt, (UInt, Seq[(UInt, UInt)]))]) = (toLAN | reqIs(ReadNotSharedDirty) | expCompAck, Seq(
     // I I I
-      (srcIs(I)  | othIs(I)  | llcIs(I)  | reqExpCompAck) -> (read | opcode(ReadNoSnp)),
-      // I I V
-      (srcIs(I)  | othIs(I)  | llcIs(SC) | reqExpCompAck) -> nothing,
-      (srcIs(I)  | othIs(I)  | llcIs(UC) | reqExpCompAck) -> nothing,
-      (srcIs(I)  | othIs(I)  | llcIs(UD) | reqExpCompAck) -> nothing,
-      // I V I
-      (srcIs(I)  | othIs(UD) | llcIs(I)  | reqExpCompAck) -> (snpOne | opcode(SnpNotSharedDirtyFwd) | needDB),
-      (srcIs(I)  | othIs(SC) | llcIs(I)  | reqExpCompAck) -> (snpOne | opcode(SnpNotSharedDirtyFwd) | needDB),
-      // V I I
-      (srcIs(UD) | othIs(I)  | llcIs(I)  | reqExpCompAck) -> error,
-      (srcIs(SC) | othIs(I)  | llcIs(I)  | reqExpCompAck) -> error,
-      // V V I
-      (srcIs(SC) | othIs(SC) | llcIs(I)  | reqExpCompAck) -> error,
+    (srcIs(I)  | othIs(I)  | llcIs(I) ) -> (read(ReadNoSnp), Seq(noTaskResp -> wriSRC(UD))),
+    // I I UC
+    (srcIs(I)  | othIs(I)  | llcIs(UC)) -> (nothingTODO, Seq(noTaskResp -> (cmtDat(CompData) | resp(UC)    | wriSRC(UD) | wriLLC(I)))),
+    // I I UD
+    (srcIs(I)  | othIs(I)  | llcIs(UD)) -> (nothingTODO, Seq(noTaskResp -> (cmtDat(CompData) | resp(UD_PD) | wriSRC(UD) | wriLLC(I)))),
+    // I SC I
+    (srcIs(I)  | othIs(SC) | llcIs(I) ) -> (snpOne(SnpNotSharedDirtyFwd), Seq(
+      (rspIs(SnpRespFwded)     | resp(SC) | fwdIs(SC)) -> (wriSRC(SC) | wriOTH(SC)), // SC SC I
+      (datIs(SnpRespDataFwded) | resp(SC) | fwdIs(SC)) -> (wriSRC(SC) | wriOTH(SC)), // SC SC I
+      (rspIs(SnpRespFwded)     | resp(I)  | fwdIs(SC)) -> (wriSRC(SC) | wriOTH(I)),  // SC I  I
+      (datIs(SnpRespDataFwded) | resp(I)  | fwdIs(SC)) -> (wriSRC(SC) | wriOTH(I)),  // SC I  I
+      (rspIs(SnpResp)          | resp(I))              -> (secRead(ReadNoSnp) | secNeedDB | waitSecDone | cmtDat(CompData) | resp(SC) | wriSRC(SC)), // SC SC  I // No Fwd
     )),
-    // BBN
-    (isReq | toBBN | opIs(ReadNotSharedDirty), Seq(
-      // I I I
-      (srcIs(I)  | othIs(I)  | llcIs(I)  | reqExpCompAck) -> (read | opcode(ReadNotSharedDirty) | needDB | expCompAck | canNest),
-      // I I V
-      (srcIs(I)  | othIs(I)  | llcIs(SC) | reqExpCompAck) -> nothing,
-      (srcIs(I)  | othIs(I)  | llcIs(UC) | reqExpCompAck) -> nothing,
-      (srcIs(I)  | othIs(I)  | llcIs(UD) | reqExpCompAck) -> nothing,
-      // I V I
-      (srcIs(I)  | othIs(UD) | llcIs(I)  | reqExpCompAck) -> (snpOne | opcode(SnpNotSharedDirtyFwd) | needDB),
-      (srcIs(I)  | othIs(SC) | llcIs(I)  | reqExpCompAck) -> (snpOne | opcode(SnpNotSharedDirtyFwd) | needDB),
-      // V I I
-      (srcIs(UD) | othIs(I)  | llcIs(I)  | reqExpCompAck) -> error,
-      (srcIs(SC) | othIs(I)  | llcIs(I)  | reqExpCompAck) -> error,
-      // V V I
-      (srcIs(SC) | othIs(SC) | llcIs(I)  | reqExpCompAck) -> error,
+    // I UD I
+    (srcIs(I)  | othIs(UD) | llcIs(I) ) -> (snpOne(SnpNotSharedDirtyFwd) | needDB, Seq(
+      (rspIs(SnpRespFwded)     | resp(SC)    | fwdIs(SC)) -> (wriSRC(SC) | wriOTH(SC)), // SC SC I
+      (datIs(SnpRespDataFwded) | resp(SC)    | fwdIs(SC)) -> (wriSRC(SC) | wriOTH(SC)), // SC SC I
+      (rspIs(SnpRespFwded)     | resp(I)     | fwdIs(SC)) -> (wriSRC(SC) | wriOTH(I)),  // SC I  I
+      (datIs(SnpRespDataFwded) | resp(I)     | fwdIs(SC)) -> (wriSRC(SC) | wriOTH(I)),  // SC I  I
+      (datIs(SnpRespDataFwded) | resp(SC_PD) | fwdIs(SC)) -> (wriSRC(SC) | wriOTH(SC) | secWriOrAtm(WriteNoSnpFull)), // SC SC I
+      (datIs(SnpRespDataFwded) | resp(I_PD)  | fwdIs(SC)) -> (wriSRC(SC) | wriOTH(I)  | secWriOrAtm(WriteNoSnpFull)), // SC I  I
+      (rspIs(SnpResp)          | resp(I))                 -> (secRead(ReadNoSnp) | waitSecDone | wriSRC(UD) | wriOTH(I)), // UD I  I // No Fwd
     )),
-  )
+    // SC I I
+    (srcIs(SC) | othIs(I)  | llcIs(I) ) -> (nothingTODO, Seq(noTaskResp -> error)),
+    // UD I I
+    (srcIs(UD) | othIs(I)  | llcIs(I) ) -> (nothingTODO, Seq(noTaskResp -> error)),
+    // SC SC I
+    (srcIs(SC) | othIs(SC) | llcIs(I) ) -> (nothingTODO, Seq(noTaskResp -> error)),
+  ))
 
-  def readUnique: Seq[(UInt, UInt)] = Seq(
-    // LAN
-    // I I I
-    (isReq | toLAN | opIs(ReadUnique) | srcIs(I)  | othIs(I)  | llcIs(I)  | reqExpCompAck) -> (read | opcode(ReadNoSnp)),
-    // I I V
-    (isReq | toLAN | opIs(ReadUnique) | srcIs(I)  | othIs(I)  | llcIs(SC) | reqExpCompAck) -> nothing,
-    (isReq | toLAN | opIs(ReadUnique) | srcIs(I)  | othIs(I)  | llcIs(UC) | reqExpCompAck) -> nothing,
-    (isReq | toLAN | opIs(ReadUnique) | srcIs(I)  | othIs(I)  | llcIs(UD) | reqExpCompAck) -> nothing,
-    // I V I
-    (isReq | toLAN | opIs(ReadUnique) | srcIs(I)  | othIs(UD) | llcIs(I)  | reqExpCompAck) -> (snpOth | opcode(SnpUniqueFwd) | needDB),
-    (isReq | toLAN | opIs(ReadUnique) | srcIs(I)  | othIs(SC) | llcIs(I)  | reqExpCompAck) -> (snpOth | opcode(SnpUniqueFwd) | needDB),
-    // V I I
-    (isReq | toLAN | opIs(ReadUnique) | srcIs(UD) | othIs(I)  | llcIs(I)  | reqExpCompAck) -> error,
-    (isReq | toLAN | opIs(ReadUnique) | srcIs(SC) | othIs(I)  | llcIs(I)  | reqExpCompAck) -> (read | opcode(ReadNoSnp)),
-    // V V I
-    (isReq | toLAN | opIs(ReadUnique) | srcIs(SC) | othIs(SC) | llcIs(I)  | reqExpCompAck) -> (snpOth | opcode(SnpUniqueFwd) | needDB),
 
-    // BBN
+  // ReadNotSharedDirty To BBN
+  def readNotSharedDirty_bbn: (UInt, Seq[(UInt, (UInt, Seq[(UInt, UInt)]))]) = (toBBN | reqIs(ReadNotSharedDirty) | expCompAck, Seq(
     // I I I
-    (isReq | toBBN | opIs(ReadUnique) | srcIs(I)  | othIs(I)  | llcIs(I)  | reqExpCompAck) -> (read | opcode(ReadUnique) | needDB | expCompAck | canNest),
-    // I I V
-    (isReq | toBBN | opIs(ReadUnique) | srcIs(I)  | othIs(I)  | llcIs(SC) | reqExpCompAck) -> (read | opcode(MakeReadUnique) | needDB | expCompAck | canNest),
-    (isReq | toBBN | opIs(ReadUnique) | srcIs(I)  | othIs(I)  | llcIs(UC) | reqExpCompAck) -> nothing,
-    (isReq | toBBN | opIs(ReadUnique) | srcIs(I)  | othIs(I)  | llcIs(UD) | reqExpCompAck) -> nothing,
-    // I V I
-    (isReq | toBBN | opIs(ReadUnique) | srcIs(I)  | othIs(UD) | llcIs(I)  | reqExpCompAck) -> (snpOth | opcode(SnpUniqueFwd) | needDB),
-    (isReq | toBBN | opIs(ReadUnique) | srcIs(I)  | othIs(SC) | llcIs(I)  | reqExpCompAck) -> (read | opcode(MakeReadUnique) | needDB | expCompAck | canNest), // Will SnpUniqueFwd(oth) when MakeReadUnique done without nest
-    // V I I
-    (isReq | toBBN | opIs(ReadUnique) | srcIs(UD) | othIs(I)  | llcIs(I)  | reqExpCompAck) -> error,
-    (isReq | toBBN | opIs(ReadUnique) | srcIs(SC) | othIs(I)  | llcIs(I)  | reqExpCompAck) -> (read | opcode(MakeReadUnique) | needDB | expCompAck | canNest),
-    // V V I
-    (isReq | toBBN | opIs(ReadUnique) | srcIs(SC) | othIs(SC) | llcIs(I)  | reqExpCompAck) -> (read | opcode(MakeReadUnique) | needDB | expCompAck | canNest), // Will SnpMakeInvalid(oth) when MakeReadUnique done without nest
-  )
+    (srcIs(I)  | othIs(I)  | llcIs(I) ) -> (read(ReadNotSharedDirty) | needDB | canNest | taskECA, Seq(
+      (datIs(CompData) | respIs(SC))    -> (cmtDat(CompData) | resp(SC)    | wriSRC(SC)), // SC I I
+      (datIs(CompData) | respIs(UC))    -> (cmtDat(CompData) | resp(UC)    | wriSRC(UD)), // UD I I
+      (datIs(CompData) | respIs(UD_PD)) -> (cmtDat(CompData) | resp(UD_PD) | wriSRC(UD)), // UD I I
+    )),
+    // I I SC
+    (srcIs(I)  | othIs(I)  | llcIs(SC)) -> (nothingTODO, Seq(noTaskResp -> (cmtDat(CompData) | resp(SC) | wriSRC(SC) | wriLLC(I)))),
+    // I I UC
+    (srcIs(I)  | othIs(I)  | llcIs(UC)) -> (nothingTODO, Seq(noTaskResp -> (cmtDat(CompData) | resp(UC) | wriSRC(UD) | wriLLC(I)))),
+    // I I UD
+    (srcIs(I)  | othIs(I)  | llcIs(UD)) -> (nothingTODO, Seq(noTaskResp -> (cmtDat(CompData) | resp(UD_PD) | wriSRC(UD) | wriLLC(I)))),
+    // I SC I
+    (srcIs(I)  | othIs(SC) | llcIs(I) ) -> (snpOth(SnpUnique) | retToSrc | needDB, Seq(
+      (datIs(SnpRespData)  | resp(I))   -> (cmtDat(CompData)  | resp(SC) | wriSRC(SC) | wriOTH(SC)), // SC I I
+      (rspIs(SnpResp)      | resp(I))   -> (secRead(ReadUnique) | secTaskECA | secNeedDB | secCanNest | waitSecDone | cmtDat(CompData) | resp(UD_PD) | wriSRC(UD) | wriOTH(I)),  // UD I I
+    )),
+    // I UD I
+    (srcIs(I)  | othIs(UD) | llcIs(I) ) -> (snpOne(SnpNotSharedDirtyFwd) | needDB, Seq(
+      (rspIs(SnpRespFwded)     | resp(SC)    | fwdIs(SC)) -> (wriSRC(SC) | wriOTH(SC)), // SC SC I
+      (datIs(SnpRespDataFwded) | resp(SC)    | fwdIs(SC)) -> (wriSRC(SC) | wriOTH(SC)), // SC SC I
+      (rspIs(SnpRespFwded)     | resp(I)     | fwdIs(SC)) -> (wriSRC(SC) | wriOTH(I)),  // SC I  I
+      (datIs(SnpRespDataFwded) | resp(I)     | fwdIs(SC)) -> (wriSRC(SC) | wriOTH(I)),  // SC I  I
+      (datIs(SnpRespDataFwded) | resp(SC_PD) | fwdIs(SC)) -> (wriSRC(SC) | wriOTH(SC) | secWriOrAtm(WriteNoSnpFull)), // SC SC I
+      (datIs(SnpRespDataFwded) | resp(I_PD)  | fwdIs(SC)) -> (wriSRC(SC) | wriOTH(I)  | secWriOrAtm(WriteNoSnpFull)), // SC I  I
+      (rspIs(SnpResp)          | resp(I))                 -> (secRead(ReadUnique) | secTaskECA | secNeedDB | secCanNest | waitSecDone | cmtDat(CompData) | resp(UD_PD) | wriSRC(UD) | wriOTH(I)),  // UD I I
+    )),
+    // SC I I
+    (srcIs(SC) | othIs(I)  | llcIs(I) ) -> (nothingTODO, Seq(noTaskResp -> error)),
+    // UD I I
+    (srcIs(UD) | othIs(I)  | llcIs(I) ) -> (nothingTODO, Seq(noTaskResp -> error)),
+    // SC SC I
+    (srcIs(SC) | othIs(SC) | llcIs(I) ) -> (nothingTODO, Seq(noTaskResp -> error)),
+  ))
 
-  def makeReadUnique: Seq[(UInt, UInt)] = Seq(
-    // LAN
-    // I I I
-    (isReq | toLAN | opIs(MakeReadUnique) | srcIs(I)  | othIs(I)  | llcIs(I)  | reqExpCompAck) -> (read | opcode(ReadNoSnp)),
-    // I I V
-    (isReq | toLAN | opIs(MakeReadUnique) | srcIs(I)  | othIs(I)  | llcIs(SC) | reqExpCompAck) -> nothing,
-    (isReq | toLAN | opIs(MakeReadUnique) | srcIs(I)  | othIs(I)  | llcIs(UC) | reqExpCompAck) -> nothing,
-    (isReq | toLAN | opIs(MakeReadUnique) | srcIs(I)  | othIs(I)  | llcIs(UD) | reqExpCompAck) -> nothing,
-    // I V I
-    (isReq | toLAN | opIs(MakeReadUnique) | srcIs(I)  | othIs(UD) | llcIs(I)  | reqExpCompAck) -> (snpOth | opcode(SnpUniqueFwd) | needDB),
-    (isReq | toLAN | opIs(MakeReadUnique) | srcIs(I)  | othIs(SC) | llcIs(I)  | reqExpCompAck) -> (snpOth | opcode(SnpUniqueFwd) | needDB),
-    // V I I
-    (isReq | toLAN | opIs(MakeReadUnique) | srcIs(UD) | othIs(I)  | llcIs(I)  | reqExpCompAck) -> error,
-    (isReq | toLAN | opIs(MakeReadUnique) | srcIs(SC) | othIs(I)  | llcIs(I)  | reqExpCompAck) -> nothing,
-    // V V I
-    (isReq | toLAN | opIs(MakeReadUnique) | srcIs(SC) | othIs(SC) | llcIs(I)  | reqExpCompAck) -> (snpOth | opcode(SnpMakeInvalid)),
 
-    // BBN
+  // ReadUnique To LAN
+  def readUnique_lan: (UInt, Seq[(UInt, (UInt, Seq[(UInt, UInt)]))]) = (toLAN | reqIs(ReadUnique) | expCompAck, Seq(
     // I I I
-    (isReq | toBBN | opIs(MakeReadUnique) | srcIs(I)  | othIs(I)  | llcIs(I)  | reqExpCompAck) -> (read | opcode(MakeReadUnique) | needDB | expCompAck | canNest),
-    // I I V
-    (isReq | toBBN | opIs(MakeReadUnique) | srcIs(I)  | othIs(I)  | llcIs(SC) | reqExpCompAck) -> (read | opcode(MakeReadUnique) | needDB | expCompAck | canNest),
-    (isReq | toBBN | opIs(MakeReadUnique) | srcIs(I)  | othIs(I)  | llcIs(UC) | reqExpCompAck) -> nothing,
-    (isReq | toBBN | opIs(MakeReadUnique) | srcIs(I)  | othIs(I)  | llcIs(UD) | reqExpCompAck) -> nothing,
-    // I V I
-    (isReq | toBBN | opIs(MakeReadUnique) | srcIs(I)  | othIs(UD) | llcIs(I)  | reqExpCompAck) -> (snpOth | opcode(SnpUniqueFwd) | needDB),
-    (isReq | toBBN | opIs(MakeReadUnique) | srcIs(I)  | othIs(SC) | llcIs(I)  | reqExpCompAck) -> (read | opcode(MakeReadUnique) | needDB | expCompAck | canNest), // Will SnpUniqueFwd(oth) when MakeReadUnique done without nest
-    // V I I
-    (isReq | toBBN | opIs(MakeReadUnique) | srcIs(UD) | othIs(I)  | llcIs(I)  | reqExpCompAck) -> error,
-    (isReq | toBBN | opIs(MakeReadUnique) | srcIs(SC) | othIs(I)  | llcIs(I)  | reqExpCompAck) -> (read | opcode(MakeReadUnique) | needDB | expCompAck | canNest),
-    // V V I
-    (isReq | toBBN | opIs(MakeReadUnique) | srcIs(SC) | othIs(SC) | llcIs(I)  | reqExpCompAck) -> (read | opcode(MakeReadUnique) | needDB  | expCompAck | canNest), // Will SnpMakeInvalid(oth) when MakeReadUnique done without nest
-  )
-  
-  def table: Seq[(UInt, Seq[(UInt, UInt)])] = readNotSharedDirty // readNoSnp ++ readNotSharedDirty ++ readUnique ++ makeReadUnique
+    (srcIs(I)  | othIs(I)  | llcIs(I) ) -> (read(ReadNoSnp), Seq(noTaskResp -> wriSRC(UD))),
+    // I I UC
+    (srcIs(I)  | othIs(I)  | llcIs(UC)) -> (nothingTODO, Seq(noTaskResp -> (cmtDat(CompData) | resp(UC)    | wriSRC(UD) | wriLLC(I)))),
+    // I I UD
+    (srcIs(I)  | othIs(I)  | llcIs(UD)) -> (nothingTODO, Seq(noTaskResp -> (cmtDat(CompData) | resp(UD_PD) | wriSRC(UD) | wriLLC(I)))),
+    // I SC I
+    (srcIs(I)  | othIs(SC) | llcIs(I) ) -> (snpOth(SnpUniqueFwd), Seq(
+      (rspIs(SnpRespFwded) | resp(I) | fwdIs(UC)) -> (wriSRC(UD) | wriOTH(I)), // UD I I
+      (rspIs(SnpResp)      | resp(I))             -> (secRead(ReadNoSnp) | waitSecDone | wriSRC(UD) | wriOTH(I)), // UD I  I // No Fwd
+    )),
+    // I UD I
+    (srcIs(I)  | othIs(UD) | llcIs(I) ) -> (snpOth(SnpUniqueFwd) | needDB, Seq(
+      (rspIs(SnpRespFwded) | resp(I)  | fwdIs(UC))    -> (wriSRC(UD) | wriOTH(I)), // UD I I
+      (rspIs(SnpRespFwded) | resp(I)  | fwdIs(UD_PD)) -> (wriSRC(UD) | wriOTH(I)), // UD I I
+      (datIs(SnpRespData)  | resp(I_PD))              -> (cmtDat(CompData) | resp(UD_PD) | wriSRC(UD) | wriOTH(I)),   // UD I I
+      (rspIs(SnpResp)      | resp(I))                 -> (secRead(ReadNoSnp) | waitSecDone | wriSRC(UD) | wriOTH(I)), // UD I  I // No Fwd
+    )),
+    // SC I I
+    (srcIs(SC) | othIs(I)  | llcIs(I) ) -> (read(ReadNoSnp), Seq(noTaskResp -> wriSRC(UD))),
+    // UD I I
+    (srcIs(UD) | othIs(I)  | llcIs(I) ) -> (nothingTODO, Seq(noTaskResp -> error)),
+    // SC SC I
+    (srcIs(SC) | othIs(SC) | llcIs(I) ) -> (snpOth(SnpUniqueFwd), Seq(
+      (rspIs(SnpRespFwded) | resp(I) | fwdIs(UC)) -> (wriSRC(UD) | wriOTH(I)), // UD I I
+      (rspIs(SnpResp)      | resp(I))             -> (secRead(ReadNoSnp) | waitSecDone | wriSRC(UD) | wriOTH(I)), // UD I  I // No Fwd
+    )),
+  ))
+
+  // ReadUnique To BBN
+  def readUnique_bbn: (UInt, Seq[(UInt, (UInt, Seq[(UInt, UInt)]))]) = (toBBN | reqIs(ReadUnique) | expCompAck, Seq(
+    // I I I
+    (srcIs(I)  | othIs(I)  | llcIs(I) ) -> (read(ReadUnique) | needDB | canNest | taskECA, Seq(
+      (datIs(CompData) | respIs(UC))    -> (cmtDat(CompData) | resp(UC)    | wriSRC(UD)), // UD I I
+      (datIs(CompData) | respIs(UD_PD)) -> (cmtDat(CompData) | resp(UD_PD) | wriSRC(UD)), // UD I I
+    )),
+    // I I SC
+    (srcIs(I)  | othIs(I)  | llcIs(SC)) -> (read(ReadUnique) | needDB | canNest | taskECA, Seq(
+      (datIs(CompData) | respIs(UC))    -> (cmtDat(CompData) | resp(UC)    | wriSRC(UD) | wriLLC(I)), // UD I I
+      (datIs(CompData) | respIs(UD_PD)) -> (cmtDat(CompData) | resp(UD_PD) | wriSRC(UD) | wriLLC(I)), // UD I I
+    )),
+    // I I UC
+    (srcIs(I)  | othIs(I)  | llcIs(UC)) -> (nothingTODO, Seq(noTaskResp -> (cmtDat(CompData) | resp(UC)    | wriSRC(UD) | wriLLC(I)))),
+    // I I UD
+    (srcIs(I)  | othIs(I)  | llcIs(UD)) -> (nothingTODO, Seq(noTaskResp -> (cmtDat(CompData) | resp(UD_PD) | wriSRC(UD) | wriLLC(I)))),
+    // I SC I
+    (srcIs(I)  | othIs(SC) | llcIs(I) ) -> (read(ReadUnique) | needDB | canNest | taskECA, Seq(
+      (datIs(CompData) | resp(UC))      -> (secSnpOth(SnpMakeInvalid) | waitSecDone | cmtDat(CompData) | resp(UC)    | wriSRC(UD) | wriOTH(I)), // UD I I
+      (datIs(CompData) | resp(UC_PD))   -> (secSnpOth(SnpMakeInvalid) | waitSecDone | cmtDat(CompData) | resp(UD_PD) | wriSRC(UD) | wriOTH(I)), // UD I I
+    )),
+    // I UD I
+    (srcIs(I)  | othIs(UD) | llcIs(I) ) -> (snpOth(SnpUniqueFwd) | needDB, Seq(
+      (rspIs(SnpRespFwded) | resp(I) | fwdIs(UC))     -> (wriSRC(UD) | wriOTH(I)), // UD I I
+      (rspIs(SnpRespFwded) | resp(I) | fwdIs(UD_PD))  -> (wriSRC(UD) | wriOTH(I)), // UD I I
+      (datIs(SnpRespData)  | resp(I_PD))              -> (cmtDat(CompData) | resp(UD_PD) | wriSRC(UD) | wriOTH(I)), // UD I I
+      (rspIs(SnpResp)      | resp(I))                 -> (secRead(ReadUnique) | secTaskECA | canNest | waitSecDone | cmtDat(CompData) | resp(UD_PD) | wriSRC(UD) | wriOTH(I)), // UD I  I // No Fwd
+    )),
+    // SC I I
+    (srcIs(SC) | othIs(I)  | llcIs(I) ) -> (read(ReadUnique) | needDB | canNest | taskECA, Seq(
+      (datIs(CompData) | respIs(UC))    -> (cmtDat(CompData) | resp(UC)    | wriSRC(UD)), // UD I I
+      (datIs(CompData) | respIs(UD_PD)) -> (cmtDat(CompData) | resp(UD_PD) | wriSRC(UD)), // UD I I
+    )),
+    // UD I I
+    (srcIs(UD) | othIs(I)  | llcIs(I) ) -> (nothingTODO, Seq(noTaskResp -> error)),
+    // SC SC I
+    (srcIs(SC) | othIs(SC) | llcIs(I) ) -> (read(ReadUnique) | needDB | canNest | taskECA, Seq(
+      (datIs(CompData) | respIs(UC))    -> (secSnpOth(SnpMakeInvalid) | waitSecDone | cmtDat(CompData) | resp(UC)    | wriSRC(UD)), // UD I I
+      (datIs(CompData) | respIs(UD_PD)) -> (secSnpOth(SnpMakeInvalid) | waitSecDone | cmtDat(CompData) | resp(UD_PD) | wriSRC(UD)), // UD I I
+    )),
+  ))
+
+
+  // readNoSnp ++ readOnce ++ readNotSharedDirty ++ readUnique ++ makeReadUnique
+  def table: Seq[(UInt, Seq[(UInt, (UInt, Seq[(UInt, UInt)]))])] = Seq(readNotSharedDirty_lan, readNotSharedDirty_bbn, readUnique_lan, readUnique_bbn)
+  def table_lan: Seq[(UInt, Seq[(UInt, (UInt, Seq[(UInt, UInt)]))])] = Seq(readNotSharedDirty_lan, readUnique_lan)
 }

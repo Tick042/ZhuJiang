@@ -37,6 +37,8 @@ trait HasDirMsg extends DJBundle { this: DJBundle =>
   }
 }
 
+class DirMsg(implicit p: Parameters) extends DJBundle with HasDirMsg
+
 // With Addr
 class DirEntry(dirType: String)(implicit p: Parameters) extends DJBundle with HasDirParam with HasAddr {
   override def paramType: String = dirType

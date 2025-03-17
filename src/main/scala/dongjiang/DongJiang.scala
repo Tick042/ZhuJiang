@@ -16,6 +16,7 @@ import xijiang._
 import xijiang.router.base.DeviceIcnBundle
 import xs.utils.ResetRRArbiter
 import xs.utils.debug.{DomainInfo, HardwareAssertion}
+import dongjiang.frontend.decode.Decode._
 
 
 class DJConfigIO(implicit p: Parameters) extends DJBundle {
@@ -98,6 +99,7 @@ class DongJiang(lanNode: Node, bbnNode: Option[Node] = None)(implicit p: Paramet
        |                     = [posTag(${posTag_ua_hi}:${posTag_ua_lo})] + [posSet(${posSet_ua_hi}:${posSet_ua_lo})] + [dirBank(${dirBank_ua_hi}:${dirBank_ua_lo})]
        |                     = [ci(${ci_ua_hi}:${ci_ua_lo})] + [unUse(${ci_ua_lo-1}:0)]
        |                     = [unUse(${useAddrBits-1}:${dsBank_ua_hi+1})] + [dsBank(${dsBank_ua_hi}:${dsBank_ua_lo})]
+       | decodeTableSize: ${c*s*t} = ChiInst($c) x StateInst($s) x TaskInst($t)
        |}
        |""".stripMargin)
 
