@@ -55,7 +55,7 @@ class DirectoryBase(dirType: String, dirBank: Int)(implicit p: Parameters) exten
   * SRAM, Reg and Wire declaration
   */
   val metaArray = Module(new SinglePortSramTemplate(
-    gen         = Vec(param.nrMetas + (if(dirType == "sf") 1 else 0), new ChiState(dirType)), // extern bit for judge Unique or Share
+    gen         = Vec(param.nrMetas, new ChiState(dirType)),
     set         = param.sets,
     way         = param.ways,
     shouldReset = true,
@@ -97,26 +97,21 @@ class DirectoryBase(dirType: String, dirBank: Int)(implicit p: Parameters) exten
   val resetDoneReg  = RegEnable(true.B, false.B, metaArray.io.req.ready & replArray.io.rreq.ready & replArray.io.wreq.ready)
 
   // [D0]: Receive Req and Read/Write SRAM
-  val wriMask_d0      = Wire(UInt(param.ways.W))
-  val wriMetaVec_d0   = Wire(Vec(param.nrMetas + (if(dirType == "sf") 1 else 0), new ChiState(dirType)))
 
   // [D1]: Get SRAM Resp
   val reqSftReg_d1    = RegInit(VecInit(Seq.fill(readDirLatency) { 0.U.asTypeOf(new DJBundle with HasAddr with HasPosIndex {
     override def addrType: String = dirType
-    val wriWayOH      = UInt(param.ways.W)
     val metaVec       = Vec(param.nrMetas, new ChiState(dirType))
-    val unique        = Bool()
+    val wriWayOH      = UInt(param.ways.W)
   }) }))
   val replSftReg_d1   = RegInit(VecInit(Seq.fill(readDirLatency-1) { 0.U(repl.nBits.W) }))
   val tagRespReg_d1   = RegInit(VecInit(Seq.fill(param.ways) { 0.U.asTypeOf(UInt(param.tagBits.W)) }))
   val metaRespReg_d1  = RegInit(VecInit(Seq.fill(param.ways) { VecInit(Seq.fill(param.nrMetas) { 0.U.asTypeOf(new ChiState(dirType)) }) }))
-  val uniVecReg_d1_opt= if(dirType == "sf") Some(Reg(Vec(param.ways, Bool()))) else None
 
   // [D2]: Select Way and Output DIR Resp
   // from d1
   val req_d2          = WireInit(0.U.asTypeOf(reqSftReg_d1.head))
   val metaVec_d2      = WireInit(0.U.asTypeOf(metaRespReg_d1))
-  val uniqueVec_d2_opt= if(dirType == "sf") Some(Wire(Vec(param.ways, Bool()))) else None
   val replMes_d2      = WireInit(0.U(repl.nBits.W))
   val addrVec_d2      = WireInit(VecInit(Seq.fill(param.ways) { 0.U.asTypeOf(new DJBundle with HasAddr {
     override def addrType: String = dirType
@@ -135,15 +130,8 @@ class DirectoryBase(dirType: String, dirBank: Int)(implicit p: Parameters) exten
   val reqSet_d0   = Mux(shiftReg.updTagMeta_d2, req_d2.set, Mux(io.write.valid, io.write.bits.set, io.read.bits.set))
 
   // write message
-  wriMask_d0      := Mux(shiftReg.updTagMeta_d2, selWayOH_d2, io.write.bits.wayOH)
-  wriMetaVec_d0.zipWithIndex.foreach {
-    case(meta, i) =>
-      if(i < param.ways) {
-        meta.state := Mux(shiftReg.updTagMeta_d2, req_d2.metaVec(i), io.write.bits.metaVec(i)).state // Meta
-      } else {
-        meta.state := Mux(shiftReg.updTagMeta_d2, req_d2.unique, io.write.bits.uniqueOpt.get) // Unique
-      }
-  }
+  val wriMask_d0     = Mux(shiftReg.updTagMeta_d2, selWayOH_d2,     io.write.bits.wayOH)
+  val wriMetaVec_d0  = Mux(shiftReg.updTagMeta_d2, req_d2.metaVec,  io.write.bits.metaVec)
 
   // sram read/write type
   val writeHit_d0 = io.write.valid & io.write.bits.hit
@@ -203,7 +191,6 @@ class DirectoryBase(dirType: String, dirBank: Int)(implicit p: Parameters) exten
   reqSftReg_d1.last.pos       := Mux(io.write.valid, io.write.bits.pos,  io.read.bits.pos)
   reqSftReg_d1.last.wriWayOH  := io.write.bits.wayOH
   reqSftReg_d1.last.metaVec   := io.write.bits.metaVec
-  reqSftReg_d1.last.unique    := io.write.bits.uniqueOpt.getOrElse(false.B)
   reqSftReg_d1.zipWithIndex.foreach {
     case(sft, i) =>
       if(i > 0) {
@@ -213,16 +200,8 @@ class DirectoryBase(dirType: String, dirBank: Int)(implicit p: Parameters) exten
 
   // tagReg_d1 and metaVecReg_d1
   when(shiftReg.getTagMeta_d1) {
-    tagRespReg_d1 := tagArray.io.resp.bits.data
-    if(dirType== "llc") {
-      metaRespReg_d1 := metaArray.io.resp.bits.data
-    } else {
-      metaArray.io.resp.bits.data.zipWithIndex.foreach {
-        case(d, i) =>
-          metaRespReg_d1(i) := d.init
-          uniVecReg_d1_opt.get(i) := d.last.state.asBool
-      }
-    }
+    tagRespReg_d1  := tagArray.io.resp.bits.data
+    metaRespReg_d1 := metaArray.io.resp.bits.data
   }
   HardwareAssertion(!(tagArray.io.resp.valid  ^ shiftReg.getTagMeta_d1))
   HardwareAssertion(!(metaArray.io.resp.valid ^ shiftReg.getTagMeta_d1))
@@ -278,12 +257,6 @@ class DirectoryBase(dirType: String, dirBank: Int)(implicit p: Parameters) exten
   io.resp.bits.hit     := hit_d2
   io.resp.bits.metaVec := metaVec_d2(selWay)
   io.resp.bits.pos     := req_d2.pos
-
-  // Special handling of sf
-  if (dirType == "sf") {
-    uniqueVec_d2_opt.get       := uniVecReg_d1_opt.get
-    io.resp.bits.uniqueOpt.get := uniqueVec_d2_opt.get(selWay)
-  }
   HardwareAssertion.placePipe(Int.MaxValue-3)
 
   // Update Lock Table

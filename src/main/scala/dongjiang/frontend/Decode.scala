@@ -63,7 +63,7 @@ class Decode(implicit p: Parameters) extends DJModule {
   val dirValid_s3   = io.respDir_s3.valid
   // Get SF
   val sfHit_s3      = io.respDir_s3.bits.sf.hit
-  val unique_s3     = io.respDir_s3.bits.sf.uniqueOpt.get
+  val unique_s3     = false.B
   val srcHit_s3     = io.respDir_s3.bits.sf.metaVec(metaId_s3).state.asBool
   val othHit_s3     = io.respDir_s3.bits.sf.metaVec.map(_.state).zipWithIndex.map { case(m, i) => m & metaId_s3 =/= i.U }.reduce(_ | _).asBool
   val sfState_s3    = Mux(unique_s3, ChiState.UD, ChiState.SC)
