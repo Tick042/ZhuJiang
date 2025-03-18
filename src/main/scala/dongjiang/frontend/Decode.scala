@@ -17,7 +17,9 @@ class Decode(implicit p: Parameters) extends DJModule {
    * IO declaration
    */
   val io = IO(new Bundle {
-    val task_s2     = Flipped(Valid(new Bundle {
+    // Configuration
+    val config      = new DJConfigIO()
+    val task_s2     = Flipped(Valid(new DJBundle {
       val chi       = new ChiTask with HasAddr
       val pos       = new PosIndex()
     }))
@@ -26,7 +28,7 @@ class Decode(implicit p: Parameters) extends DJModule {
       val sf        = new DirEntry("sf")
       val alrDeqDB  = Bool()
     }))
-    val task_s3     = Valid(new Bundle {
+    val task_s3     = Valid(new DJBundle {
       val chi       = new ChiTask with HasAddr
       val pos       = new PosIndex()
       val dir       = new DirMsg()
@@ -52,7 +54,8 @@ class Decode(implicit p: Parameters) extends DJModule {
    * [S2]: Pre-Decode
    */
   chiInst_s2.channel    := io.task_s2.bits.chi.channel
-  chiInst_s2.toLAN      := io.task_s2.bits.chi.isLAN
+  chiInst_s2.fromLAN    := io.task_s2.bits.chi.fromLAN
+  chiInst_s2.toLAN      := io.task_s2.bits.chi.toLAN(io.config.ci)
   chiInst_s2.opcode     := io.task_s2.bits.chi.opcode
   chiInst_s2.expCompAck := io.task_s2.bits.chi.expCompAck
   stateInstVecReg_s3    := Decode.decode(chiInst_s2)._1._1

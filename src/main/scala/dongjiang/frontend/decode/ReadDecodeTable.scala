@@ -24,7 +24,7 @@ object Read_LAN_DCT_DMT {
 //  )
 
   // ReadNotSharedDirty To LAN
-  def readNotSharedDirty: (UInt, Seq[(UInt, (UInt, Seq[(UInt, (UInt, Seq[(UInt, UInt)]))]))]) = (toLAN | reqIs(ReadNotSharedDirty) | expCompAck, Seq(
+  def readNotSharedDirty: (UInt, Seq[(UInt, (UInt, Seq[(UInt, (UInt, Seq[(UInt, UInt)]))]))]) = (fromLAN | toLAN | reqIs(ReadNotSharedDirty) | expCompAck, Seq(
     // I I I  -> UC I I
     (sfMiss | llcIs(I))  -> first(read(ReadNoSnp), wriSRC(true)),
     // I I SC -> UC I I
@@ -39,8 +39,8 @@ object Read_LAN_DCT_DMT {
       (datIs(SnpRespDataFwded)  | respIs(SC)    | fwdIs(SC)) -> second(wriSRC(true)), // SC SC I
       (rspIs(SnpRespFwded)      | respIs(I)     | fwdIs(SC)) -> second(wriSRC(true)), // SC I  I
       (datIs(SnpRespDataFwded)  | respIs(I)     | fwdIs(SC)) -> second(wriSRC(true)), // SC I  I
-      (datIs(SnpRespDataFwded)  | respIs(SC_PD) | fwdIs(SC)) -> second(wriOrAtm(WriteBackFull), wriSRC(true)), // SC SC I
-      (datIs(SnpRespDataFwded)  | respIs(I_PD)  | fwdIs(SC)) -> second(wriOrAtm(WriteBackFull), wriSRC(true)), // SC I  I
+      (datIs(SnpRespDataFwded)  | respIs(SC_PD) | fwdIs(SC)) -> second(wriOrAtm(WriteNoSnpFull), wriSRC(true)), // SC SC I
+      (datIs(SnpRespDataFwded)  | respIs(I_PD)  | fwdIs(SC)) -> second(wriOrAtm(WriteNoSnpFull), wriSRC(true)), // SC I  I
       (rspIs(SnpResp)           | respIs(I))                 -> second(read(ReadNoSnp), wriSRC(true)) // UC I  I // No Fwd
     )),
     // V I I -> UC I I
@@ -56,7 +56,7 @@ object Read_LAN_DCT_DMT {
   ))
 
   // ReadUnique To LAN
-  def readUnique: (UInt, Seq[(UInt, (UInt, Seq[(UInt, (UInt, Seq[(UInt, UInt)]))]))]) = (toBBN | reqIs(ReadUnique) | expCompAck, Seq(
+  def readUnique: (UInt, Seq[(UInt, (UInt, Seq[(UInt, (UInt, Seq[(UInt, UInt)]))]))]) = (fromLAN | toLAN | reqIs(ReadUnique) | expCompAck, Seq(
     // I I I  -> UC I I
     (sfMiss | llcIs(I))  -> first(read(ReadNoSnp), wriSRC(true)),
     // I I SC -> UC I I

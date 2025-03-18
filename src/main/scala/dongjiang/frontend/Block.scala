@@ -19,7 +19,7 @@ class Block(dirBank: Int)(implicit p: Parameters) extends DJModule {
   val io = IO(new Bundle {
     // Task
     val chiTask_s0    = Flipped(Valid(new ChiTask with HasAddr))
-    val task_s1       = Valid(new Bundle {
+    val task_s1       = Valid(new DJBundle {
       val chi         = new ChiTask with HasAddr
       val pos         = new PosIndex()
     })

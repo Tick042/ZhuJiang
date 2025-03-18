@@ -7,6 +7,8 @@ import zhujiang.chi._
 import dongjiang.bundle._
 import dongjiang.utils._
 
+
+// TODO: modify it
 class ChiXbar(implicit p: Parameters) extends DJModule {
   /*
    * IO declaration

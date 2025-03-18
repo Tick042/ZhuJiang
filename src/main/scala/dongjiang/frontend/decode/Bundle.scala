@@ -27,8 +27,11 @@ import dongjiang.bundle.ChiChannel._
  */
 
 class ChiInst extends Bundle {
+  // REQ: LAN -> LAN; LAN -> BBN; BBN -> LAN;
+  // SNP: BBN -> LAN
   val channel     = UInt(ChiChannel.width.W)
-  val toLAN       = Bool() // true -> LAN; false -> BBN; only use in REQ
+  val fromLAN     = Bool() // true -> LAN; false -> BBN
+  val toLAN       = Bool() // true -> LAN; false -> BBN
   val opcode      = UInt(ReqOpcode.width.max(SnpOpcode.width).W)
   val expCompAck  = Bool()
 }
@@ -59,11 +62,10 @@ trait HasOperations { this: Bundle =>
 class Operations(implicit p: Parameters) extends Bundle with HasOperations
 
 object SnpTgt {
-  val width       = 2
-  val NONE        = "b00".U
-  val ALL         = "b01".U
-  val ONE         = "b10".U // Select first other
-  val OTH         = "b11".U
+  val width       = 3
+  val ALL         = "b001".U
+  val ONE         = "b010".U // Select first other
+  val OTH         = "b100".U
 }
 
 trait HasTaskCode { this: Bundle with HasOperations =>
@@ -79,6 +81,9 @@ trait HasTaskCode { this: Bundle with HasOperations =>
   // Snoop
   val retToSrc    = Bool()
   val snpTgt      = UInt(SnpTgt.width.W)
+  def snpAll      = snpTgt(0)
+  def snpOne      = snpTgt(1)
+  def snpoth      = snpTgt(2)
 }
 
 class TaskCode extends Bundle with HasOperations with HasTaskCode
@@ -149,6 +154,8 @@ object Inst {
   // Chi Inst
   def isReq             : UInt = { val temp = WireInit(0.U.asTypeOf(new ChiInst())); temp.channel       := REQ;     temp.asUInt }
   def isSnp             : UInt = { val temp = WireInit(0.U.asTypeOf(new ChiInst())); temp.channel       := SNP;     temp.asUInt }
+  def fromLAN           : UInt = { val temp = WireInit(0.U.asTypeOf(new ChiInst())); temp.fromLAN       := true.B;  temp.asUInt }
+  def fromBBN           : UInt = { val temp = WireInit(0.U.asTypeOf(new ChiInst())); temp.fromLAN       := false.B; temp.asUInt }
   def toLAN             : UInt = { val temp = WireInit(0.U.asTypeOf(new ChiInst())); temp.toLAN         := true.B;  temp.asUInt }
   def toBBN             : UInt = { val temp = WireInit(0.U.asTypeOf(new ChiInst())); temp.toLAN         := false.B; temp.asUInt }
   def reqIs   (x: UInt) : UInt = { val temp = WireInit(0.U.asTypeOf(new ChiInst())); temp.opcode        := x;       require(x.getWidth == ReqOpcode.width); temp.asUInt | isReq }

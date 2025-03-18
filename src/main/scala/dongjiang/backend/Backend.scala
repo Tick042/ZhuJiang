@@ -47,17 +47,20 @@ class Backend(implicit p: Parameters) extends DJModule {
     // Multicore Req running in LAN
     val multicore     = Bool()
     // From Frontend
-    val commitVec     = Vec(djparam.nrDirBank, Flipped(Valid(new DJBundle with HasLLCTxnID {
+    val commitVec     = Vec(djparam.nrDirBank, Flipped(Valid(new DJBundle {
       val chi         = new ChiTask
+      val pos         = new PosIndex()
       val dir         = new DirMsg()
       val ops         = new Operations()
       val alrDeqDB    = Bool()
     })))
     // From Frontend
-    val cmTaskVec     = Vec(djparam.nrDirBank, Flipped(Decoupled(new DJBundle with HasLLCTxnID {
+    val cmTaskVec     = Vec(djparam.nrDirBank, Flipped(Decoupled(new DJBundle {
       val chi         = new ChiTask with HasAddr
+      val pos         = new PosIndex()
       val ops         = new Operations()
       val alrDeqDB    = Bool()
+      val snpVec      = Vec(nrSfMetas, Bool())
     })))
   })
   io <> DontCare

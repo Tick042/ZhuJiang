@@ -24,6 +24,9 @@ trait HasAddr extends DJBundle { this: DJBundle =>
   def posTag    = getPosTag(addr)
   def posSet    = getPosSet(addr)
 
+  def toLAN(selfCI: UInt) = ci === selfCI
+  def toBBN(selfCI: UInt) = ci =/= selfCI
+
   def catByX(bank: UInt, tag: UInt, tagBits: Int, set: UInt, setBits: Int, dirBank: UInt, offset: UInt = 0.U(offsetBits.W)) = {
     require(bank.getWidth    == bankBits,    s"bankBits:    ${bank.getWidth} =/= ${bankBits}")
     require(tag.getWidth     == tagBits,     s"tagBits:     ${tag.getWidth} =/= ${tagBits}")

@@ -18,7 +18,7 @@ class DataCtrl(implicit p: Parameters) extends DJModule {
     val txDatVec    = Vec(nrIcn, Decoupled(new DataFlit()))
     val rxDat       = Flipped(Decoupled(new DataFlit())) // Only use rxDat.Data/DataID/BE in DataCtrl
     // Read LLC Hit Message
-    val hitMesVec   = Vec(djparam.nrDirBank, Flipped(Decoupled(new DJBundle with HasLLCTxnID {
+    val hitMesVec   = Vec(djparam.nrDirBank, Flipped(Decoupled(new DJBundle with HasPosIndex {
       val set       = UInt(llcSetBits.W)
       val way       = UInt(llcWayBits.W)
     })))

@@ -36,7 +36,7 @@ class Directory(implicit p: Parameters) extends DJModule {
       val sf        = new DirEntry("sf")
     })
     // Read LLC Hit Message to Data
-    val rHitMesVec  = Vec(djparam.nrDirBank, Decoupled(new DJBundle with HasLLCTxnID {
+    val rHitMesVec  = Vec(djparam.nrDirBank, Decoupled(new DJBundle with HasPosIndex {
       val set       = UInt(llcSetBits.W)
       val way       = UInt(llcWayBits.W)
     }))
@@ -128,7 +128,6 @@ class Directory(implicit p: Parameters) extends DJModule {
       // Hit Resp
       io.rHitMesVec(i).valid        := earlyShiftRegVec(i).isValid & llc.io.resp.bits.hit
       io.rHitMesVec(i).bits.pos     := llc.io.resp.bits.pos
-      io.rHitMesVec(i).bits.dirBank := i.U
       io.rHitMesVec(i).bits.set     := llc.io.resp.bits.set
       io.rHitMesVec(i).bits.way     := OHToUInt(llc.io.resp.bits.wayOH)
   }

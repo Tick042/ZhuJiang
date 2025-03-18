@@ -32,17 +32,20 @@ class Frontend(dirBank: Int)(implicit p: Parameters) extends DJModule {
       val alrDeqDB    = Bool()
     }))
     // To Backend
-    val commit_s4     = Valid(new DJBundle with HasLLCTxnID {
+    val commit_s4     = Valid(new DJBundle {
       val chi         = new ChiTask
+      val pos       = new PosIndex()
       val dir         = new DirMsg()
       val ops         = new Operations()
       val alrDeqDB    = Bool()
     })
     // To Backend
-    val cmTask_s4     = Decoupled(new DJBundle with HasLLCTxnID {
+    val cmTask_s4     = Decoupled(new DJBundle {
       val chi         = new ChiTask with HasAddr
+      val pos         = new PosIndex()
       val ops         = new Operations()
       val alrDeqDB    = Bool()
+      val snpVec      = Vec(nrSfMetas, Bool())
     })
     // Update PoS Message
     val updPosTag     = Input(Valid(new Addr with HasPosIndex))
@@ -82,6 +85,7 @@ class Frontend(dirBank: Int)(implicit p: Parameters) extends DJModule {
   req2Task.io.config        := io.config
   snp2Task.io.config        := io.config
   posTable.io.config        := io.config
+  decode.io.config          := io.config
   issue.io.config           := io.config
 
   // io
