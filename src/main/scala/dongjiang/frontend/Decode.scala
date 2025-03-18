@@ -39,8 +39,8 @@ class Decode(implicit p: Parameters) extends DJModule {
    * Reg and Wire declaration
    */
   val chiInst_s2          = Wire(new ChiInst)
-  val stateInstVecReg_s3  = RegInit(VecInit(Seq.fill(Decode.s) { 0.U.asTypeOf(new StateInst) }))
-  val taskCodeVecReg_s3   = RegInit(VecInit(Seq.fill(Decode.s) { 0.U.asTypeOf(new TaskCode)  }))
+  val stateInstVecReg_s3  = RegInit(VecInit(Seq.fill(Decode.l_si) { 0.U.asTypeOf(new StateInst) }))
+  val taskCodeVecReg_s3   = RegInit(VecInit(Seq.fill(Decode.l_si) { 0.U.asTypeOf(new TaskCode)  }))
   val validReg_s3         = RegNext(io.task_s2.valid)
   val taskReg_s3          = RegEnable(io.task_s2.bits, 0.U.asTypeOf(io.task_s2.bits), io.task_s2.valid)
   val stateInst_s3        = Wire(new StateInst())
@@ -63,22 +63,20 @@ class Decode(implicit p: Parameters) extends DJModule {
   val dirValid_s3   = io.respDir_s3.valid
   // Get SF
   val sfHit_s3      = io.respDir_s3.bits.sf.hit
-  val unique_s3     = false.B
-  val srcHit_s3     = io.respDir_s3.bits.sf.metaVec(metaId_s3).state.asBool
-  val othHit_s3     = io.respDir_s3.bits.sf.metaVec.map(_.state).zipWithIndex.map { case(m, i) => m & metaId_s3 =/= i.U }.reduce(_ | _).asBool
-  val sfState_s3    = Mux(unique_s3, ChiState.UD, ChiState.SC)
-  val srcState_s3   = Mux(dirValid_s3 & srcHit_s3, sfState_s3, ChiState.I)
-  val othState_s3   = Mux(dirValid_s3 & othHit_s3, sfState_s3, ChiState.I)
+  val _srcHit_s3    = io.respDir_s3.bits.sf.metaVec(metaId_s3).state.asBool
+  val _othHit_s3    = io.respDir_s3.bits.sf.metaVec.map(_.state).zipWithIndex.map { case(m, i) => m & metaId_s3 =/= i.U }.reduce(_ | _).asBool
+  val srcHit_s3     = Mux(dirValid_s3 & sfHit_s3, _srcHit_s3, false.B)
+  val othHit_s3     = Mux(dirValid_s3 & sfHit_s3, _othHit_s3, false.B)
   // Get LLC
   val llcHit_s3     = io.respDir_s3.bits.llc.hit
   val _llcState_s3  = io.respDir_s3.bits.llc.metaVec.head.state
   val llcState_s3   = Mux(dirValid_s3 & llcHit_s3, _llcState_s3, ChiState.I)
   HardwareAssertion.withEn(io.respDir_s3.valid, validReg_s3 & taskReg_s3.memAttr.cacheable)
 
-  stateInst_s3.valid      := true.B
-  stateInst_s3.srcState   := srcState_s3
-  stateInst_s3.othState   := othState_s3
-  stateInst_s3.llcState   := llcState_s3
+  stateInst_s3.valid    := true.B
+  stateInst_s3.srcHit   := srcHit_s3
+  stateInst_s3.othHit   := othHit_s3
+  stateInst_s3.llcState := llcState_s3
 
   /*
    * [S3]: Decode

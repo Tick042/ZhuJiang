@@ -94,7 +94,7 @@ class DongJiang(lanNode: Node, bbnNode: Option[Node] = None)(implicit p: Paramet
        |                     = [posTag(${posTag_ua_hi}:${posTag_ua_lo})] + [posSet(${posSet_ua_hi}:${posSet_ua_lo})] + [dirBank(${dirBank_ua_hi}:${dirBank_ua_lo})]
        |                     = [ci(${ci_ua_hi}:${ci_ua_lo})] + [unUse(${ci_ua_lo-1}:0)]
        |                     = [unUse(${useAddrBits-1}:${dsBank_ua_hi+1})] + [dsBank(${dsBank_ua_hi}:${dsBank_ua_lo})]
-       | decodeTableSize: ${c*s*t} = ChiInst($c) x StateInst($s) x TaskInst($t)
+       | decodeTableSize: ${l_ci*l_si*l_ti} = ChiInst($l_ci) x StateInst($l_si) x TaskInst($l_ti) x SecTaskInst($l_sti)
        |}
        |""".stripMargin)
 
