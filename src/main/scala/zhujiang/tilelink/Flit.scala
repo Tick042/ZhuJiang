@@ -7,7 +7,9 @@ case class TilelinkParams(
   addrBits: Int = 32,
   sourceBits: Int = 5,
   sinkBits: Int = 5,
-  dataBits: Int = 64
+  dataBits: Int = 64,
+  userBits:Int = 0,
+  echoBits:Int = 0
 )
 
 class AFlit(params: TilelinkParams) extends Bundle {
@@ -18,6 +20,7 @@ class AFlit(params: TilelinkParams) extends Bundle {
   val address = UInt(params.addrBits.W)
   val mask = UInt((params.dataBits / 8).W)
   val data = UInt(params.dataBits.W)
+  val user = UInt(params.userBits.W)
   val corrupt = Bool()
 }
 
@@ -29,6 +32,7 @@ class DFlit(params: TilelinkParams) extends Bundle {
   val sink = UInt(params.sinkBits.W)
   val denied = UInt((params.dataBits / 8).W)
   val data = UInt(params.dataBits.W)
+  val echo = UInt(params.echoBits.W)
   val corrupt = Bool()
 }
 
