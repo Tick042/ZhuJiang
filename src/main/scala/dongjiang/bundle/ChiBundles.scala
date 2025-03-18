@@ -4,6 +4,9 @@ import chisel3._
 import dongjiang.DJBundle
 import zhujiang.chi._
 
+/*
+ * Chi Resp
+ */
 object ChiResp {
   val width = 3
 
@@ -42,6 +45,10 @@ trait HasChiResp { this: Bundle =>
 
 class ChiResp extends Bundle with HasChiResp
 
+
+/*
+ * Chi State
+ */
 object ChiState {
   val width = 3
 
@@ -74,6 +81,10 @@ class ChiState(dirType: String = "llc") extends Bundle with HasChiState {
   override def stateType: String = dirType
 }
 
+
+/*
+ * Chi Channel
+ */
 object ChiChannel {
   val width = 2
 
@@ -93,6 +104,10 @@ trait HasChiChannel { this: Bundle =>
   def isSnp = channel === ChiChannel.SNP
 }
 
+
+/*
+ * Chi Order and ExpCompAck
+ */
 trait HasChiOrderAndExpCompAck { this: Bundle =>
   val order       = UInt(Order.width.W)
   val expCompAck  = Bool()
@@ -104,6 +119,9 @@ trait HasChiOrderAndExpCompAck { this: Bundle =>
   def isRA    = order === Order.RequestAccepted
 }
 
+/*
+ * Chi SnpField
+ */
 trait HasChiSnpField { this: Bundle =>
   val snpAttr = Bool()
   val snoopMe = Bool()
@@ -114,6 +132,9 @@ trait HasChiSnpField { this: Bundle =>
   def illegalSnpField = snoopMe & !snpAttr
 }
 
+/*
+ * Chi Size
+ */
 trait HasChiSize { this: DJBundle =>
   val size = UInt(ChiSizeBits.W)
 
@@ -121,5 +142,3 @@ trait HasChiSize { this: DJBundle =>
   def isHalfSize    = size === ChiHalfSize.U
   def isNotFullSize = size <= ChiHalfSize.U
 }
-
-

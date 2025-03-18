@@ -109,7 +109,7 @@ class Directory(implicit p: Parameters) extends DJModule {
   wriSFBankPipe.io.enq.valid  := io.write.sf.fire
   wriSFBankPipe.io.enq.bits   := io.write.sf.bits.bankId
 
-  // Store DCID
+  // Store Early Request
   earlyShiftRegVec.zip(io.readVec).foreach { case(a, b) => a.input(b.fire & b.bits.early) }
 
   // Output wResp and rHitMesVec

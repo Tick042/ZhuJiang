@@ -4,8 +4,11 @@ import chisel3._
 import chisel3.util._
 import org.chipsalliance.cde.config._
 import dongjiang._
+import zhujiang.chi.MemAttr
 
-
+/*
+ * Addr
+ */
 trait HasAddr extends DJBundle { this: DJBundle =>
   val addr      = UInt(addrBits.W)
 
@@ -47,6 +50,9 @@ class Addr(dirType: String = "llc")(implicit p: Parameters) extends DJBundle wit
   override def addrType: String = dirType
 }
 
+/*
+ * PoS
+ */
 class PosIndex(implicit p: Parameters) extends DJBundle {
   val set = UInt(posSetBits.W)
   val way = UInt(posWayBits.W)
@@ -66,21 +72,16 @@ trait HasLLCTxnID extends DJBundle { this: DJBundle =>
   def llcTxnID  = pos.getLLCTxnID(dirBank)
 }
 
-trait HasDCID extends DJBundle { this: DJBundle =>
-  val dcid = UInt(dcIdBits.W)
-}
-
-class DCID(implicit p: Parameters) extends DJBundle with HasDCID
-
-class Shift(latency: Int)(implicit p: Parameters) extends DJBundle {
-  val s = UInt(latency.W)
-
-  def input(fire: Bool) = {
-    if (latency == 1) {
-      this.s := fire
-    } else {
-      this.s := Cat(fire, s(latency - 1, 1))
-    }
-  }
-  def isValid = s(0)
+/*
+ * ChiTask
+ */
+class ChiTask(implicit p: Parameters) extends DJBundle with HasNodeId with HasChiChannel
+  with HasChiOp with HasChiOrderAndExpCompAck with HasChiSnpField with HasChiSize  {
+  // REQ
+  val txnID       = UInt(ChiTxnIdBits.W)
+  val memAttr     = new MemAttr()
+  // SNP
+  val fwdNID      = UInt(nodeIdBits.W)
+  val fwdTxnID    = UInt(ChiFwdTxnIdBits.W)
+  val retToSrc    = Bool()
 }

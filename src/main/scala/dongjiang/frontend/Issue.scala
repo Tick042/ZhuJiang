@@ -12,14 +12,33 @@ import xs.utils.debug._
 
 import dongjiang.frontend.decode._
 
-class Issue(implicit p: Parameters) extends DJModule {
+class Issue(dirBank: Int)(implicit p: Parameters) extends DJModule {
   /*
    * IO declaration
    */
   val io = IO(new Bundle {
-    val task_s3     = Valid(new ChiTask with HasPosIndex)
-    val RespTask_s4 = Valid(new ChiTask())
-
+    // Configuration
+    val config      = new DJConfigIO()
+    // In
+    val task_s3     = Flipped(Valid(new Bundle {
+      val chi       = new ChiTask with HasAddr
+      val pos       = new PosIndex()
+      val dir       = new DirMsg()
+      val code      = new TaskCode()
+      val alrDeqDB  = Bool()
+    }))
+    // Out
+    val commit_s4   = Valid(new DJBundle with HasLLCTxnID {
+      val chi       = new ChiTask
+      val dir       = new DirMsg()
+      val ops       = new Operations()
+      val alrDeqDB  = Bool()
+    })
+    val cmTask_s4   = Decoupled(new DJBundle with HasLLCTxnID {
+      val chi       = new ChiTask with HasAddr
+      val ops       = new Operations()
+      val alrDeqDB  = Bool()
+    })
   })
   dontTouch(io)
   HardwareAssertion(!io.task_s3.valid)

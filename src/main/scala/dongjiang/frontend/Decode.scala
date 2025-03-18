@@ -17,14 +17,17 @@ class Decode(implicit p: Parameters) extends DJModule {
    * IO declaration
    */
   val io = IO(new Bundle {
-    val task_s2     = Flipped(Valid(new ChiTask with HasPosIndex))
+    val task_s2     = Flipped(Valid(new Bundle {
+      val chi       = new ChiTask with HasAddr
+      val pos       = new PosIndex()
+    }))
     val respDir_s3  = Flipped(Valid(new DJBundle {
       val llc       = new DirEntry("llc")
       val sf        = new DirEntry("sf")
       val alrDeqDB  = Bool()
     }))
     val task_s3     = Valid(new Bundle {
-      val chi       = new ChiTask()
+      val chi       = new ChiTask with HasAddr
       val pos       = new PosIndex()
       val dir       = new DirMsg()
       val code      = new TaskCode()
@@ -44,22 +47,21 @@ class Decode(implicit p: Parameters) extends DJModule {
   val validReg_s3         = RegNext(io.task_s2.valid)
   val taskReg_s3          = RegEnable(io.task_s2.bits, 0.U.asTypeOf(io.task_s2.bits), io.task_s2.valid)
   val stateInst_s3        = Wire(new StateInst())
-  HardwareAssertion(!(validReg_s3 ^ io.respDir_s3.valid))
 
   /*
    * [S2]: Pre-Decode
    */
-  chiInst_s2.channel    := io.task_s2.bits.channel
-  chiInst_s2.toLAN      := io.task_s2.bits.isLAN
-  chiInst_s2.opcode     := io.task_s2.bits.opcode
-  chiInst_s2.expCompAck := io.task_s2.bits.expCompAck
+  chiInst_s2.channel    := io.task_s2.bits.chi.channel
+  chiInst_s2.toLAN      := io.task_s2.bits.chi.isLAN
+  chiInst_s2.opcode     := io.task_s2.bits.chi.opcode
+  chiInst_s2.expCompAck := io.task_s2.bits.chi.expCompAck
   stateInstVecReg_s3    := Decode.decode(chiInst_s2)._1._1
   taskCodeVecReg_s3     := Decode.decode(chiInst_s2)._1._2
 
   /*
    * [S3]: Decode
    */
-  val metaId_s3     = taskReg_s3.metaId
+  val metaId_s3     = taskReg_s3.chi.metaId
   val dirValid_s3   = io.respDir_s3.valid
   // Get SF
   val sfHit_s3      = io.respDir_s3.bits.sf.hit
@@ -71,7 +73,7 @@ class Decode(implicit p: Parameters) extends DJModule {
   val llcHit_s3     = io.respDir_s3.bits.llc.hit
   val _llcState_s3  = io.respDir_s3.bits.llc.metaVec.head.state
   val llcState_s3   = Mux(dirValid_s3 & llcHit_s3, _llcState_s3, ChiState.I)
-  HardwareAssertion.withEn(io.respDir_s3.valid, validReg_s3 & taskReg_s3.memAttr.cacheable)
+  HardwareAssertion.withEn(io.respDir_s3.valid, validReg_s3 & taskReg_s3.chi.memAttr.cacheable)
 
   stateInst_s3.valid    := true.B
   stateInst_s3.srcHit   := srcHit_s3
@@ -88,7 +90,7 @@ class Decode(implicit p: Parameters) extends DJModule {
    */
   // task_s3
   io.task_s3.valid          := validReg_s3
-  io.task_s3.bits.chi       := taskReg_s3
+  io.task_s3.bits.chi       := taskReg_s3.chi
   io.task_s3.bits.pos       := taskReg_s3.pos
   io.task_s3.bits.dir       := io.respDir_s3.bits
   io.task_s3.bits.alrDeqDB  := io.respDir_s3.bits.alrDeqDB

@@ -8,7 +8,8 @@ import dongjiang._
 import dongjiang.utils._
 import dongjiang.bundle._
 import xs.utils.debug._
-import dongjiang.directory.DirEntry
+import dongjiang.directory.{DirEntry, DirMsg}
+import dongjiang.frontend.decode.Operations
 
 class Frontend(dirBank: Int)(implicit p: Parameters) extends DJModule {
   /*
@@ -24,11 +25,25 @@ class Frontend(dirBank: Int)(implicit p: Parameters) extends DJModule {
     val readDir_s1    = Decoupled(new DJBundle with HasAddr with HasPosIndex {
       val early       = Bool() // Early access to data
     })
+    // From Directory
     val respDir_s3    = Flipped(Valid(new DJBundle {
       val llc         = new DirEntry("llc")
       val sf          = new DirEntry("sf")
       val alrDeqDB    = Bool()
     }))
+    // To Backend
+    val commit_s4     = Valid(new DJBundle with HasLLCTxnID {
+      val chi         = new ChiTask
+      val dir         = new DirMsg()
+      val ops         = new Operations()
+      val alrDeqDB    = Bool()
+    })
+    // To Backend
+    val cmTask_s4     = Decoupled(new DJBundle with HasLLCTxnID {
+      val chi         = new ChiTask with HasAddr
+      val ops         = new Operations()
+      val alrDeqDB    = Bool()
+    })
     // Update PoS Message
     val updPosTag     = Input(Valid(new Addr with HasPosIndex))
     val cleanPos      = Input(Valid(new DJBundle with HasPosIndex {
@@ -54,9 +69,11 @@ class Frontend(dirBank: Int)(implicit p: Parameters) extends DJModule {
   val block       = Module(new Block(dirBank))
   // S2: Wait Directory Response
   val bufReg_s2   = RegInit(0.U.asTypeOf(block.io.task_s1.bits))
-  val shiftReg_s2 = RegInit(0.U.asTypeOf(new Shift(readDirLatency)))
+  val shiftReg_s2 = RegInit(0.U.asTypeOf(new Shift(readDirLatency-1)))
   // S3: Receive DirResp and Decode
   val decode      = Module(new Decode())
+  // S4: Issue Task to Backend
+  val issue       = Module(new Issue(dirBank))
 
   /*
    * Connect
@@ -65,17 +82,20 @@ class Frontend(dirBank: Int)(implicit p: Parameters) extends DJModule {
   req2Task.io.config        := io.config
   snp2Task.io.config        := io.config
   posTable.io.config        := io.config
+  issue.io.config           := io.config
 
   // io
   io.readDir_s1             <> block.io.readDir_s1
   io.fastResp               <> fastDecoupledQueue(block.io.fastResp_s1) // TODO: queue size = nrDirBank
   io.posBusy                := posTable.io.busy
+  io.commit_s4              := issue.io.commit_s4
+  io.cmTask_s4              <> issue.io.cmTask_s4
 
   // req2Task
   req2Task.io.rxReq         <> io.rxReq
 
   // reqTaskBuf [S0]
-  reqTaskBuf.io.chiTask     <> req2Task.io.chiTask
+  reqTaskBuf.io.chiTaskIn   <> req2Task.io.chiTask
   reqTaskBuf.io.retry_s1    := block.io.retry_s1
   reqTaskBuf.io.sleep_s1    := posTable.io.sleep_s1
   reqTaskBuf.io.wakeup      := posTable.io.wakeup
@@ -85,11 +105,11 @@ class Frontend(dirBank: Int)(implicit p: Parameters) extends DJModule {
     // snp2Task
     snp2Task.io.rxSnp       <> io.rxSnp
     // snpTaskBuf [S0]
-    snpTaskBuf.io.chiTask   <> snp2Task.io.chiTask
+    snpTaskBuf.io.chiTaskIn <> snp2Task.io.chiTask
     reqTaskBuf.io.retry_s1  := block.io.retry_s1
     reqTaskBuf.io.sleep_s1  := DontCare // snp never sleep
     reqTaskBuf.io.wakeup    := DontCare // not need to wakeup
-    HardwareAssertion(!snpTaskBuf.io.task_s0.valid)
+    HardwareAssertion(!snpTaskBuf.io.chiTask_s0.valid)
   } else {
     // DontCare
     io.rxSnp                <> DontCare
@@ -106,7 +126,7 @@ class Frontend(dirBank: Int)(implicit p: Parameters) extends DJModule {
 
 
   // block [S1]
-  block.io.task_s0          := fastRRArb(Seq(snpTaskBuf.io.task_s0, reqTaskBuf.io.task_s0))
+  block.io.chiTask_s0       := fastRRArb(Seq(snpTaskBuf.io.chiTask_s0, reqTaskBuf.io.chiTask_s0))
   block.io.posRetry_s1      := posTable.io.full_s1 | posTable.io.sleep_s1
   block.io.posIdx_s1        := posTable.io.posIdx_s1
   block.io.willUseBufNum    := 0.U(issueBufBits.W) + shiftReg_s2.s.orR + decode.io.task_s3.valid
@@ -121,6 +141,8 @@ class Frontend(dirBank: Int)(implicit p: Parameters) extends DJModule {
   decode.io.task_s2.bits    := bufReg_s2
   decode.io.respDir_s3      := io.respDir_s3
 
+  // issue [S4]
+  issue.io.task_s3          := decode.io.task_s3
 
   /*
    * HardwareAssertion placePipe

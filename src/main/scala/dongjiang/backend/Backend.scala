@@ -10,6 +10,8 @@ import dongjiang.bundle._
 import dongjiang.directory.DirEntry
 import xijiang.Node
 import xs.utils.debug.{DomainInfo, HardwareAssertion}
+import dongjiang.directory.{DirEntry, DirMsg}
+import dongjiang.frontend.decode.Operations
 
 class Backend(implicit p: Parameters) extends DJModule {
   /*
@@ -44,8 +46,20 @@ class Backend(implicit p: Parameters) extends DJModule {
     val unlockVec2    = Vec(djparam.nrDirBank, Vec(2, Valid(new PosIndex())))
     // Multicore Req running in LAN
     val multicore     = Bool()
+    // From Frontend
+    val commitVec     = Vec(djparam.nrDirBank, Flipped(Valid(new DJBundle with HasLLCTxnID {
+      val chi         = new ChiTask
+      val dir         = new DirMsg()
+      val ops         = new Operations()
+      val alrDeqDB    = Bool()
+    })))
+    // From Frontend
+    val cmTaskVec     = Vec(djparam.nrDirBank, Flipped(Decoupled(new DJBundle with HasLLCTxnID {
+      val chi         = new ChiTask with HasAddr
+      val ops         = new Operations()
+      val alrDeqDB    = Bool()
+    })))
   })
   io <> DontCare
-
 
 }

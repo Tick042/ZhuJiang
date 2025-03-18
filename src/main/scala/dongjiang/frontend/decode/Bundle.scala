@@ -56,6 +56,8 @@ trait HasOperations { this: Bundle =>
   val wriOrAtm    = Bool() // Write or Atomic
 }
 
+class Operations(implicit p: Parameters) extends Bundle with HasOperations
+
 object SnpTgt {
   val width       = 2
   val NONE        = "b00".U

@@ -9,6 +9,7 @@ import dongjiang.utils._
 import dongjiang.bundle.ChiChannel._
 import xs.utils.debug._
 import zhujiang.chi.ReqOpcode._
+import dongjiang.bundle._
 
 class ReqToChiTask(implicit p: Parameters) extends DJModule {
   /*
@@ -20,7 +21,7 @@ class ReqToChiTask(implicit p: Parameters) extends DJModule {
     // CHI REQ IN
     val rxReq   = Flipped(Decoupled(new ReqFlit(false)))
     // CHI TASK OUT
-    val chiTask = Decoupled(new ChiTask())
+    val chiTask = Decoupled(new ChiTask with HasAddr)
   })
 
   // Connect Valid Ready
@@ -140,7 +141,7 @@ class SnpToChiTask(implicit p: Parameters) extends DJModule {
     // CHI REQ IN
     val rxSnp   = Flipped(Decoupled(new SnoopFlit()))
     // CHI TASK OUT
-    val chiTask = Decoupled(new ChiTask())
+    val chiTask = Decoupled(new ChiTask with HasAddr)
   })
 
   HardwareAssertion(!io.rxSnp.valid)

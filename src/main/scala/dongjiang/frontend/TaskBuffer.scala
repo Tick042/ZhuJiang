@@ -34,8 +34,8 @@ class TaskBuffer(sort: Boolean, nrEntry: Int)(implicit p: Parameters) extends DJ
    * IO declaration
    */
   val io = IO(new Bundle {
-    val chiTask     = Flipped(Decoupled(new ChiTask()))
-    val task_s0     = Valid(new ChiTask)
+    val chiTaskIn   = Flipped(Decoupled(new ChiTask with HasAddr))
+    val chiTask_s0  = Valid(new ChiTask with HasAddr)
     val req2Pos_s0  = Valid(new DJBundle with HasAddr {
       val isSnp     = Bool()
     })
@@ -51,7 +51,7 @@ class TaskBuffer(sort: Boolean, nrEntry: Int)(implicit p: Parameters) extends DJ
   val taskIdBits  = log2Ceil(nrEntry)
   val ctrlInit    = WireInit(0.U.asTypeOf(new CtrlEntry(sort, taskIdBits))); ctrlInit.state := FREE
   val ctrlEntrys  = RegInit(VecInit(Seq.fill(nrEntry) { ctrlInit }))
-  val taskEntrys  = Reg(Vec(nrEntry, new ChiTask()))
+  val taskEntrys  = Reg(Vec(nrEntry, new ChiTask with HasAddr))
   val newTaskNID  = Wire(UInt(taskIdBits.W))
   // S1: toBeFree
   val toBeFreeReg_s1        = RegInit(false.B)
@@ -65,18 +65,18 @@ class TaskBuffer(sort: Boolean, nrEntry: Int)(implicit p: Parameters) extends DJ
   val freelist    = ctrlEntrys.map(_.isFree)
   val freeId      = PriorityEncoder(freelist)
   // Store chi task
-  io.chiTask.ready     := freelist.reduce(_ | _)
-  taskEntrys(freeId)  := io.chiTask.bits
+  io.chiTaskIn.ready  := freelist.reduce(_ | _)
+  taskEntrys(freeId)  := io.chiTaskIn.bits
 
   /*
    * Count NID:
    */
   val taskValidVec  = ctrlEntrys.map(!_.isFree)
-  val addrMatchVec  = taskEntrys.map(_.useAddr === io.chiTask.bits.useAddr)
+  val addrMatchVec  = taskEntrys.map(_.useAddr === io.chiTaskIn.bits.useAddr)
   val matchVec      = taskValidVec.zip(addrMatchVec).map { case(a, b) => a & b }
   val matchNum      = PopCount(matchVec)
   if(sort) {
-    newTaskNID      := matchNum - (toBeFreeReg_s1 & toBeFreeUseAddrReg_s1 === io.chiTask.bits.useAddr)
+    newTaskNID      := matchNum - (toBeFreeReg_s1 & toBeFreeUseAddrReg_s1 === io.chiTaskIn.bits.useAddr)
   } else {
     newTaskNID      := 0.U
     HardwareAssertion(!matchVec.reduce(_ | _))
@@ -89,8 +89,8 @@ class TaskBuffer(sort: Boolean, nrEntry: Int)(implicit p: Parameters) extends DJ
   val taskValid     = beSendList.reduce(_ | _)
   val beSendId      = StepRREncoder(beSendList, taskValid)
   // task to block
-  io.task_s0.valid  := taskValid
-  io.task_s0.bits   := taskEntrys(beSendId)
+  io.chiTask_s0.valid  := taskValid
+  io.chiTask_s0.bits   := taskEntrys(beSendId)
   // req to pos
   io.req2Pos_s0.valid       := taskValid
   io.req2Pos_s0.bits.isSnp  := taskEntrys(beSendId).isSnp
@@ -106,13 +106,13 @@ class TaskBuffer(sort: Boolean, nrEntry: Int)(implicit p: Parameters) extends DJ
   ctrlEntrys.zipWithIndex.foreach {
     case(ctrl, i) =>
       // hit
-      val recTaskHit0  = io.chiTask.fire  & freeId                  === i.U & newTaskNID === 0.U
-      val recTaskHit1  = io.chiTask.fire  & freeId                  === i.U & newTaskNID =/= 0.U
-      val sendTaskHit  = taskValid        & beSendId                === i.U
-      val sleepHit     = io.sleep_s1      & toBeFreeIdReg_s1        === i.U
-      val retryHit     = io.retry_s1      & toBeFreeIdReg_s1        === i.U
-      val wakeupHit    = io.wakeup.valid  & io.wakeup.bits.useAddr  === taskEntrys(i).useAddr & ctrl.nid.getOrElse(0.U) === 0.U
-      val toFreeHit    = toBeFreeReg_s1   & toBeFreeIdReg_s1        === i.U
+      val recTaskHit0  = io.chiTaskIn.fire  & freeId                  === i.U & newTaskNID === 0.U
+      val recTaskHit1  = io.chiTaskIn.fire  & freeId                  === i.U & newTaskNID =/= 0.U
+      val sendTaskHit  = taskValid          & beSendId                === i.U
+      val sleepHit     = io.sleep_s1        & toBeFreeIdReg_s1        === i.U
+      val retryHit     = io.retry_s1        & toBeFreeIdReg_s1        === i.U
+      val wakeupHit    = io.wakeup.valid    & io.wakeup.bits.useAddr  === taskEntrys(i).useAddr & ctrl.nid.getOrElse(0.U) === 0.U
+      val toFreeHit    = toBeFreeReg_s1     & toBeFreeIdReg_s1        === i.U
       // state:
       // FREE   ---(NID=0)---> BESEND
       // FREE   ---(NID>0)---> SLEEP
@@ -132,7 +132,7 @@ class TaskBuffer(sort: Boolean, nrEntry: Int)(implicit p: Parameters) extends DJ
         true.B      -> ctrl.state,
       ))
       // nid
-      val recTaskHit  = io.chiTask.fire & freeId === i.U
+      val recTaskHit  = io.chiTaskIn.fire & freeId === i.U
       val reduceHit   = !ctrl.isFree & toBeFreeReg_s1 & toBeFreeIdReg_s1 =/= i.U & toBeFreeUseAddrReg_s1 === taskEntrys(i).useAddr
       val nextNID     = ctrl.nid.getOrElse(0.U) - reduceHit
       if(sort) {

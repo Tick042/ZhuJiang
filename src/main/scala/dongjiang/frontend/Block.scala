@@ -18,8 +18,11 @@ class Block(dirBank: Int)(implicit p: Parameters) extends DJModule {
    */
   val io = IO(new Bundle {
     // Task
-    val task_s0       = Flipped(Valid(new ChiTask()))
-    val task_s1       = Valid(new ChiTask with HasPosIndex)
+    val chiTask_s0    = Flipped(Valid(new ChiTask with HasAddr))
+    val task_s1       = Valid(new Bundle {
+      val chi         = new ChiTask with HasAddr
+      val pos         = new PosIndex()
+    })
     // Read Directory
     val readDir_s1    = Decoupled(new DJBundle with HasAddr with HasPosIndex {
       val early       = Bool() // Early access to data
@@ -40,7 +43,7 @@ class Block(dirBank: Int)(implicit p: Parameters) extends DJModule {
    * Reg and Wire declaration
    */
   val validReg_s1     = RegInit(false.B)
-  val taskReg_s1      = Reg(new ChiTask())
+  val taskReg_s1      = Reg(new ChiTask with HasAddr)
   val needRespReg_s1  = RegInit(false.B)
   val needRsvdReg_s1  = RegInit(false.B)
   val block_s1        = Wire(new Bundle {
@@ -55,9 +58,9 @@ class Block(dirBank: Int)(implicit p: Parameters) extends DJModule {
   /*
    * Receive Task
    */
-  validReg_s1     := io.task_s0.valid
-  taskReg_s1      := io.task_s0.bits
-  needRespReg_s1  := (io.task_s0.bits.isWrite & !io.task_s0.bits.reqIs(WriteEvictOrEvict)) | io.task_s0.bits.isEO
+  validReg_s1     := io.chiTask_s0.valid
+  taskReg_s1      := io.chiTask_s0.bits
+  needRespReg_s1  := (io.chiTask_s0.bits.isWrite & !io.chiTask_s0.bits.reqIs(WriteEvictOrEvict)) | io.chiTask_s0.bits.isEO
 
   /*
    * Block logic
@@ -66,7 +69,7 @@ class Block(dirBank: Int)(implicit p: Parameters) extends DJModule {
   val willUseBufNum = (validReg_s1 & !block_s1.all) + io.willUseBufNum
   val freeNum       = nrIssueBuf.U - willUseBufNum
   // Reserve an extra entry for the snp task
-  needRsvdReg_s1    := Mux(io.task_s0.bits.isSnp, freeNum === 0.U, freeNum <= 1.U)
+  needRsvdReg_s1    := Mux(io.chiTask_s0.bits.isSnp, freeNum === 0.U, freeNum <= 1.U)
   // block
   block_s1.rsvd     := needRsvdReg_s1
   block_s1.pos      := io.posRetry_s1
@@ -78,7 +81,7 @@ class Block(dirBank: Int)(implicit p: Parameters) extends DJModule {
    * Task Out
    */
   io.task_s1.valid      := validReg_s1 & !block_s1.all
-  io.task_s1.bits       := taskReg_s1.asUInt.asTypeOf(io.task_s1.bits)
+  io.task_s1.bits.chi   := taskReg_s1
   io.task_s1.bits.pos   := io.posIdx_s1
 
   /*
@@ -87,7 +90,7 @@ class Block(dirBank: Int)(implicit p: Parameters) extends DJModule {
   io.readDir_s1.valid       := validReg_s1 & taskReg_s1.memAttr.cacheable & !(block_s1.rsvd | block_s1.pos | block_s1.resp)
   io.readDir_s1.bits.addr   := taskReg_s1.addr
   io.readDir_s1.bits.pos    := io.posIdx_s1
-  io.readDir_s1.bits.early  := io.task_s1.bits.isRead | io.task_s1.bits.isSnp & io.task_s1.bits.snpIs(SnpMakeInvalid)
+  io.readDir_s1.bits.early  := io.task_s1.bits.chi.isRead | io.task_s1.bits.chi.isSnp & io.task_s1.bits.chi.snpIs(SnpMakeInvalid)
 
   /*
    * Resp to Node
