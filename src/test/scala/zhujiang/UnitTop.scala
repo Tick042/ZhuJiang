@@ -55,7 +55,7 @@ object TLULBridgeTop extends App {
 object TLUL2ChiBridgeTop extends App {
   val (config, firrtlOpts) = ZhujiangTopParser(args)
   (new ChiselStage).execute(firrtlOpts, firtoolOpts ++ Seq(
-    ChiselGeneratorAnnotation(() => new TLUL2ChiBridge(Node(nodeType = NodeType.RI, splitFlit = true, outstanding = 16), TilelinkParams(addrBits = 48))(config))
+    ChiselGeneratorAnnotation(() => new TLUL2ChiBridge(Node(nodeType = NodeType.RI, splitFlit = true, outstanding = 16), TilelinkParams(addrBits = 48, userBits = 2 /* Extra two bits for svbpmt */))(config))
   ))
 }
 

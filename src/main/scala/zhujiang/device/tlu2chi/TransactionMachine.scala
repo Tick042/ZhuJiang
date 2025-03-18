@@ -35,6 +35,7 @@ class TaskBundle(tlParams: TilelinkParams)(implicit p: Parameters) extends Bundl
   val data = UInt(tlParams.dataBits.W)
   val mask = UInt((tlParams.dataBits / 8).W)
   val size = UInt(3.W)
+  val user = UInt(tlParams.userBits.W)
 }
 
 class MachineStatus(tlParams: TilelinkParams)(implicit p: Parameters) extends Bundle {
@@ -177,6 +178,8 @@ class TransactionMachine(node: Node, tlParams: TilelinkParams, outstanding: Int)
   }
   state := nextState
 
+  val isBackTypeMM = task.user(0) // TODO: test this feature
+  val isPageTypeNC = task.user(1) // TODO: test this feature
   txreq.valid := state === MachineState.SEND_REQ && io.issueReqEn
   txreq.bits := DontCare
   txreq.bits.Addr := task.address
@@ -184,9 +187,9 @@ class TransactionMachine(node: Node, tlParams: TilelinkParams, outstanding: Int)
   txreq.bits.TxnID := io.id
 //  txreq.bits.AllowRetry := false.B
   txreq.bits.ExpCompAck := task.opcode =/= AOpcode.Get
-  txreq.bits.MemAttr := MemAttr(allocate = false.B, cacheable = false.B, device = true.B, ewa = false.B /* EAW can take any value for ReadNoSnp/WriteNoSnp* */).asUInt
+  txreq.bits.MemAttr := MemAttr(allocate = false.B, cacheable = false.B, device = !isBackTypeMM, ewa = isPageTypeNC || isBackTypeMM /* EAW can take any value for ReadNoSnp/WriteNoSnp* */).asUInt
   txreq.bits.Size := task.size
-  txreq.bits.Order := Mux(task.opcode === AOpcode.Get, Order.EndpointOrder, Order.OWO)
+  txreq.bits.Order := Mux(task.opcode === AOpcode.Get, Mux(isBackTypeMM, Order.RequestOrder, Order.EndpointOrder), Order.OWO)
 
   private val chiDataBytes = p(ZJParametersKey).dataBits / 8
   private val tlDataBytes = tlParams.dataBits / 8

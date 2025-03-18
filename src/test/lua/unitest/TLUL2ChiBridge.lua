@@ -193,7 +193,7 @@ local test_get = env.register_test_case "test_get" {
             env.negedge(math.random(1, 10))
                 chi_rxdat:compdat(txn_id, "0x1122", 0, CHIResp.I)
             
-            env.expect_happen_until(10, function () return tl_d:fire() and tl_d.bits.opcode:is(TLMessageD.AccessAckData) and tl_d.bits.data:is_hex_str("0x1122") end)
+            env.expect_happen_until(10, function () return tl_d:fire() and tl_d.bits.opcode:is(TLMessageD.AccessAckData) and tl_d.bits.data:is_hex_str("1122") end)
             env.negedge()
             env.expect_not_happen_until(10, function () return tl_d:fire() end)
 
@@ -258,12 +258,12 @@ local test_get = env.register_test_case "test_get" {
             }
 
             chi_rxdat:compdat(0, "0x1122" , 1, CHIResp.I) -- txn_id = 0, db_id = 1
-            env.expect_happen_until(10, function () return tl_d:fire() and tl_d.bits.data:is_hex_str("0x1122") end)
+            env.expect_happen_until(10, function () return tl_d:fire() and tl_d.bits.data:is_hex_str("1122") end)
             env.negedge()
                 machines[0].io_status_state:expect(0)
             
             chi_rxdat:compdat(1, "0x2233" , 1, CHIResp.I) -- txn_id = 1, db_id = 1
-            env.expect_happen_until(10, function () return tl_d:fire() and tl_d.bits.data:is_hex_str("0x2233") end)
+            env.expect_happen_until(10, function () return tl_d:fire() and tl_d.bits.data:is_hex_str("2233") end)
             env.negedge()
                 machines[1].io_status_state:expect(0)
 
@@ -282,10 +282,10 @@ local test_get = env.register_test_case "test_get" {
 
                 function ()
                     for i = 2, 15 do
-                        local data_str = "0x3344" .. string.format("%02x", i)
+                        local data_hex_str = "3344" .. string.format("%02x", i)
                         chi_rxrsp:readreceipt(i)
-                        chi_rxdat:compdat(i, data_str, 1, CHIResp.I) -- txn_id = i, db_id = 1
-                        env.expect_happen_until(10, function () return tl_d:fire() and tl_d.bits.data:is_hex_str(data_str) end)
+                        chi_rxdat:compdat(i, "0x" .. data_hex_str, 1, CHIResp.I) -- txn_id = i, db_id = 1
+                        env.expect_happen_until(10, function () return tl_d:fire() and tl_d.bits.data:is_hex_str(data_hex_str) end)
                         env.negedge()
                             machines[i].io_status_state:expect(0)
                     end
@@ -489,7 +489,7 @@ local test_mix_get_put = env.register_test_case "test_mix_get_put" {
             env.expect_happen_until(10, function () return chi_txreq:fire() and chi_txreq.bits.Opcode:is(OpcodeREQ.WriteNoSnpPtl) and chi_txreq.bits.TxnID:is(1) end)
 
             chi_rxdat:compdat(0, "0x1122", 0, CHIResp.I) -- txn_id = 0, db_id = 0
-            env.expect_happen_until(10, function () return tl_d:fire() and tl_d.bits.opcode:is(TLMessageD.AccessAckData) and tl_d.bits.data:is_hex_str("0x1122") end)
+            env.expect_happen_until(10, function () return tl_d:fire() and tl_d.bits.opcode:is(TLMessageD.AccessAckData) and tl_d.bits.data:is_hex_str("1122") end)
             env.negedge()
                 machines[0].io_status_state:expect(0)
 
@@ -536,7 +536,7 @@ local test_mix_get_put = env.register_test_case "test_mix_get_put" {
                     env.negedge()
                     chi_rxrsp:readreceipt(1)
                     chi_rxdat:compdat(1, "0x1122", 0, CHIResp.I) -- txn_id = 1, db_id = 0
-                    env.expect_happen_until(10, function () return tl_d:fire() and tl_d.bits.opcode:is(TLMessageD.AccessAckData) and tl_d.bits.data:is_hex_str("0x1122") end)
+                    env.expect_happen_until(10, function () return tl_d:fire() and tl_d.bits.opcode:is(TLMessageD.AccessAckData) and tl_d.bits.data:is_hex_str("1122") end)
                     env.negedge()
                         machines[1].io_status_state:expect(0)
                 end
@@ -549,7 +549,9 @@ local test_mix_get_put = env.register_test_case "test_mix_get_put" {
 
 fork {
     function ()
-        -- sim.dump_wave()
+        if os.getenv("DUMP") then
+            sim.dump_wave()
+        end
 
         test_get()
         test_put()
