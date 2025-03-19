@@ -60,7 +60,6 @@ class Block(dirBank: Int)(implicit p: Parameters) extends DJModule {
    */
   validReg_s1     := io.chiTask_s0.valid
   taskReg_s1      := io.chiTask_s0.bits
-  needRespReg_s1  := (io.chiTask_s0.bits.isWrite & !io.chiTask_s0.bits.reqIs(WriteEvictOrEvict)) | io.chiTask_s0.bits.isEO
 
   /*
    * Block logic
@@ -95,11 +94,16 @@ class Block(dirBank: Int)(implicit p: Parameters) extends DJModule {
   /*
    * Resp to Node
    */
+  needRespReg_s1              := (io.chiTask_s0.bits.isWrite & !io.chiTask_s0.bits.reqIs(WriteEvictOrEvict)) | (io.chiTask_s0.bits.isRead & io.chiTask_s0.bits.isEO)
   io.fastResp_s1.valid        := validReg_s1 & needRespReg_s1 & (block_s1.rsvd | block_s1.pos | block_s1.dir)
   io.fastResp_s1.bits         := DontCare
   io.fastResp_s1.bits.TgtID   := taskReg_s1.nodeId
   io.fastResp_s1.bits.TxnID   := taskReg_s1.txnID
-  io.fastResp_s1.bits.Opcode  := Mux(taskReg_s1.isEO, ReadReceipt, Mux(taskReg_s1.isOWO, DBIDResp, CompDBIDResp))
+  io.fastResp_s1.bits.Opcode  := PriorityMux(Seq(
+    taskReg_s1.isRead  & taskReg_s1.isEO      -> ReadReceipt,
+    taskReg_s1.isWrite & !taskReg_s1.noOrder  -> DBIDResp,
+    taskReg_s1.isWrite                        -> CompDBIDResp,
+  ))
   io.fastResp_s1.bits.RespErr := RespErr.NormalOkay
   io.fastResp_s1.bits.DBID    := io.posIdx_s1.getLLCTxnID(dirBank)
 

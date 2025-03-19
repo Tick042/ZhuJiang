@@ -112,10 +112,16 @@ trait HasChiOrderAndExpCompAck { this: Bundle =>
   val order       = UInt(Order.width.W)
   val expCompAck  = Bool()
 
+  // In our HNF, only can deal None, EO and OWO
+
   def noOrder = order === Order.None
+  // Permitted between: HN-I to SN-I
   def isRO    = order === Order.RequestOrder & !expCompAck
+  // Permitted between: RNto HN, and HN-I to SN-I
   def isEO    = order === Order.EndpointOrder
+  // Permitted between: RN to HN
   def isOWO   = order === Order.OWO & expCompAck
+  // Permitted between: HN-F to SN-F, and HN-I to SN-I
   def isRA    = order === Order.RequestAccepted
 }
 
