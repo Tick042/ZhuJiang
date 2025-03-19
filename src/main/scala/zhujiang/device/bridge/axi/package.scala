@@ -55,7 +55,7 @@ package object axi {
     def axiWdata: Bool = d.waddr && !d.wdata && u.wdata
 
     def needIssue: Bool = icnReadReceipt || icnDBID || icnComp || axiWaddr || axiRaddr || axiWdata
-    def wakeup: Bool = d.waddr && d.wdata && d.raddr
+    def wakeup: Bool = d.waddr && d.wdata && d.wresp && d.raddr && d.rdata
   }
 
   class AxiCtrlInfo(implicit p: Parameters) extends IcnIoDevCtrlInfoCommon(ioDataBits = 0, withData = false, mem = true)

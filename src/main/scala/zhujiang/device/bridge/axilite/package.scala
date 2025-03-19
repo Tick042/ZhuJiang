@@ -54,7 +54,7 @@ package object axilite {
     def axiWdata: Bool = d.waddr && !d.wdata && u.wdata
 
     def needIssue: Bool = icnReadReceipt || icnDBID || icnComp || axiWaddr || axiRaddr || axiWdata
-    def wakeup: Bool = d.waddr && d.wdata && d.raddr
+    def wakeup: Bool = d.waddr && d.wdata && d.wresp && d.raddr && d.rdata
   }
 
   class AxiLiteCtrlInfo(ioDataBits: Int)(implicit p: Parameters) extends IcnIoDevCtrlInfoCommon(ioDataBits = ioDataBits, withData = true, mem = false)
