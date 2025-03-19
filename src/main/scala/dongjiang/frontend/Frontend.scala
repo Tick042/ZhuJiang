@@ -32,21 +32,24 @@ class Frontend(dirBank: Int)(implicit p: Parameters) extends DJModule {
       val alrDeqDB    = Bool()
     }))
     // To Backend
-    val commit_s4     = Valid(new DJBundle {
+    val commit_s3     = Valid(new DJBundle {
       val chi         = new ChiTask
-      val pos       = new PosIndex()
+      val pos         = new PosIndex()
       val dir         = new DirMsg()
       val ops         = new Operations()
       val alrDeqDB    = Bool()
     })
-    // To Backend
-    val cmTask_s4     = Decoupled(new DJBundle {
-      val chi         = new ChiTask with HasAddr
-      val pos         = new PosIndex()
-      val ops         = new Operations()
-      val alrDeqDB    = Bool()
-      val snpVec      = Vec(nrSfMetas, Bool())
-    })
+    val cmAlloc_s4    = new DJBundle {
+      val recOps      = Input(new Operations())
+      val ops         = Output(new Operations())
+      val task        = new DJBundle {
+        val chi       = new ChiTask with HasAddr
+        val pos       = new PosIndex()
+        val ops       = new Operations()
+        val alrDeqDB  = Bool()
+        val snpVec    = Vec(nrSfMetas, Bool())
+      }
+    }
     // Update PoS Message
     val updPosTag     = Input(Valid(new Addr with HasPosIndex))
     val cleanPos      = Input(Valid(new DJBundle with HasPosIndex {
@@ -76,7 +79,7 @@ class Frontend(dirBank: Int)(implicit p: Parameters) extends DJModule {
   // S3: Receive DirResp and Decode
   val decode      = Module(new Decode())
   // S4: Issue Task to Backend
-  val issue       = Module(new Issue(dirBank))
+  val issue       = Module(new Issue())
 
   /*
    * Connect
@@ -92,8 +95,8 @@ class Frontend(dirBank: Int)(implicit p: Parameters) extends DJModule {
   io.readDir_s1             <> block.io.readDir_s1
   io.fastResp               <> fastDecoupledQueue(block.io.fastResp_s1) // TODO: queue size = nrDirBank
   io.posBusy                := posTable.io.busy
-  io.commit_s4              := issue.io.commit_s4
-  io.cmTask_s4              <> issue.io.cmTask_s4
+  io.commit_s3              := issue.io.commit_s3
+  io.cmAlloc_s4             <> issue.io.cmAlloc_s4
 
   // req2Task
   req2Task.io.rxReq         <> io.rxReq
@@ -133,7 +136,8 @@ class Frontend(dirBank: Int)(implicit p: Parameters) extends DJModule {
   block.io.chiTask_s0       := fastRRArb(Seq(snpTaskBuf.io.chiTask_s0, reqTaskBuf.io.chiTask_s0))
   block.io.posRetry_s1      := posTable.io.full_s1 | posTable.io.sleep_s1
   block.io.posIdx_s1        := posTable.io.posIdx_s1
-  block.io.willUseBufNum    := 0.U(issueBufBits.W) + shiftReg_s2.s.orR + decode.io.task_s3.valid
+  block.io.alrUseBuf        := shiftReg_s2.s.orR +& decode.io.task_s3.valid + issue.io.alrUseBuf
+  HardwareAssertion((shiftReg_s2.s.orR +& decode.io.task_s3.valid + issue.io.alrUseBuf) <= nrIssueBuf.U)
 
   // buffer [S2]
   bufReg_s2                 := Mux(block.io.task_s1.valid, block.io.task_s1.bits, bufReg_s2)

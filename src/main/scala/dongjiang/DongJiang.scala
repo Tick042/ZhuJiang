@@ -183,8 +183,8 @@ class DongJiang(lanNode: Node, bbnNode: Option[Node] = None)(implicit p: Paramet
    */
   backend.io.fastResp <> fastRRArb(frontends.map(_.io.fastResp))
   backend.io.respDir  := directory.io.wResp
-  backend.io.commitVec.zip(frontends.map(_.io.commit_s4)).foreach { case(a, b) => a <> b }
-  backend.io.cmTaskVec.zip(frontends.map(_.io.cmTask_s4)).foreach { case(a, b) => a <> b }
+  backend.io.commitVec.zip(frontends.map(_.io.commit_s3)).foreach   { case(a, b) => a <> b }
+  backend.io.cmAllocVec.zip(frontends.map(_.io.cmAlloc_s4)).foreach { case(a, b) => a <> b }
 
   /*
    * Connect DataCtrl

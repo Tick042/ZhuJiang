@@ -235,10 +235,9 @@ trait HasDJParam extends HasParseZJParam {
   lazy val dirMuticycle     = djparam.dirLatency.max(if(djparam.dirExtraHold) djparam.dirSetup + 1 else djparam.dirSetup)
   lazy val readDirLatency   = (if(djparam.dirExtraHold) djparam.dirSetup + 1 else djparam.dirSetup) + djparam.dirLatency + 1
   lazy val llcWayBits       = log2Ceil(djparam.llcWays)
-  // [S0(PoS/Block)] + [S1(ReadDir)] + [S2(Decode)] + Reserve for snp
-  lazy val nrIssueBuf       = 8 // TODO: Need to argue for sufficient resources and no deadlocks
+  // [S1(PoS/Block)] + [S2(ReadDir)] + [S3(Decode)] + Reserve for snp
+  lazy val nrIssueBuf       = 4
   lazy val issueBufBits     = log2Ceil(nrIssueBuf)
-  require(nrIssueBuf >= 1 + readDirLatency + 1 + 1)
 
 
   // Memblock Parameters

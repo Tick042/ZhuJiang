@@ -35,7 +35,7 @@ class Block(dirBank: Int)(implicit p: Parameters) extends DJModule {
     // Resp to Node(RN/SN): ReadReceipt, DBIDResp, CompDBIDResp
     val fastResp_s1   = Decoupled(new RespFlit())
     // Block Message(The number of resources already used)
-    val willUseBufNum = Input(UInt(issueBufBits.W))
+    val alrUseBuf     = Input(UInt((issueBufBits+1).W))
   })
   dontTouch(io)
 
@@ -65,10 +65,11 @@ class Block(dirBank: Int)(implicit p: Parameters) extends DJModule {
    * Block logic
    */
   // willUseBufNum = S1 + S2 + IssueBuf already use number
-  val willUseBufNum = (validReg_s1 & !block_s1.all) + io.willUseBufNum
-  val freeNum       = nrIssueBuf.U - willUseBufNum
+  val alrUseBuf_s0  = (validReg_s1 & !block_s1.all) + io.alrUseBuf; dontTouch(alrUseBuf_s0)
+  val freeBufNum_s0 = nrIssueBuf.U - alrUseBuf_s0; dontTouch(freeBufNum_s0)
+  HardwareAssertion(alrUseBuf_s0 <= nrIssueBuf.U)
   // Reserve an extra entry for the snp task
-  needRsvdReg_s1    := Mux(io.chiTask_s0.bits.isSnp, freeNum === 0.U, freeNum <= 1.U)
+  needRsvdReg_s1    := Mux(io.chiTask_s0.bits.isSnp, freeBufNum_s0 === 0.U, freeBufNum_s0 <= 1.U)
   // block
   block_s1.rsvd     := needRsvdReg_s1
   block_s1.pos      := io.posRetry_s1
@@ -100,9 +101,9 @@ class Block(dirBank: Int)(implicit p: Parameters) extends DJModule {
   io.fastResp_s1.bits.TgtID   := taskReg_s1.nodeId
   io.fastResp_s1.bits.TxnID   := taskReg_s1.txnID
   io.fastResp_s1.bits.Opcode  := PriorityMux(Seq(
-    taskReg_s1.isRead  & taskReg_s1.isEO      -> ReadReceipt,
-    taskReg_s1.isWrite & !taskReg_s1.noOrder  -> DBIDResp,
-    taskReg_s1.isWrite                        -> CompDBIDResp,
+    (taskReg_s1.isRead  & taskReg_s1.isEO)      -> ReadReceipt,
+    (taskReg_s1.isWrite & !taskReg_s1.noOrder)  -> DBIDResp,
+    (taskReg_s1.isWrite)                        -> CompDBIDResp,
   ))
   io.fastResp_s1.bits.RespErr := RespErr.NormalOkay
   io.fastResp_s1.bits.DBID    := io.posIdx_s1.getLLCTxnID(dirBank)
@@ -111,5 +112,5 @@ class Block(dirBank: Int)(implicit p: Parameters) extends DJModule {
   /*
    * HardwareAssertion placePipe
    */
-  // HardwareAssertion.placePipe(Int.MaxValue-2)
+  HardwareAssertion.placePipe(Int.MaxValue-2)
 }

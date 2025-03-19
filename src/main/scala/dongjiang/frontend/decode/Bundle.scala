@@ -81,9 +81,9 @@ trait HasTaskCode { this: Bundle with HasOperations =>
   // Snoop
   val retToSrc    = Bool()
   val snpTgt      = UInt(SnpTgt.width.W)
-  def snpAll      = snpTgt(0)
-  def snpOne      = snpTgt(1)
-  def snpoth      = snpTgt(2)
+  def snpAll      = snpTgt(0).asBool
+  def snpOne      = snpTgt(1).asBool
+  def snpOth      = snpTgt(2).asBool
 }
 
 class TaskCode extends Bundle with HasOperations with HasTaskCode

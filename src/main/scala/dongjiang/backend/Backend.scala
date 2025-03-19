@@ -54,15 +54,23 @@ class Backend(implicit p: Parameters) extends DJModule {
       val ops         = new Operations()
       val alrDeqDB    = Bool()
     })))
-    // From Frontend
-    val cmTaskVec     = Vec(djparam.nrDirBank, Flipped(Decoupled(new DJBundle {
+    val cmAllocVec    = Vec(djparam.nrDirBank, Flipped(new DJBundle {
+      val recOps      = Input(new Operations())
+      val ops         = Output(new Operations())
+      val task        = new DJBundle {
       val chi         = new ChiTask with HasAddr
       val pos         = new PosIndex()
       val ops         = new Operations()
       val alrDeqDB    = Bool()
       val snpVec      = Vec(nrSfMetas, Bool())
-    })))
+      }
+    }))
   })
   io <> DontCare
+  HardwareAssertion(!io.commitVec.map(_.valid).reduce(_ | _))
 
+  /*
+   * HardwareAssertion placePipe
+   */
+  HardwareAssertion.placePipe(Int.MaxValue - 1)
 }
