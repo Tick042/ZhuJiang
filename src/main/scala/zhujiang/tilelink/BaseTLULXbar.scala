@@ -12,10 +12,18 @@ abstract class BaseTLULXbar(implicit p: Parameters) extends ZJModule {
   def slvMatchersSeq: Seq[UInt => Bool]
 
   private lazy val dataBits = mstParams.head.dataBits
+  private lazy val userBits = mstParams.map(_.userBits).max
+  private lazy val echoBits = mstParams.map(_.echoBits).max
   private lazy val mstMaxIdBits = mstParams.map(_.sourceBits).max
   private lazy val extraIdBits = log2Ceil(mstParams.length)
   private lazy val slvIdBits = mstMaxIdBits + extraIdBits
-  private lazy val slvParams = Seq.fill(slvMatchersSeq.length)(TilelinkParams(addrBits = slvAddrBits, dataBits = dataBits, sourceBits = slvIdBits))
+  private lazy val slvParams = Seq.fill(slvMatchersSeq.length)(TilelinkParams(
+    addrBits = slvAddrBits,
+    dataBits = dataBits,
+    sourceBits = slvIdBits,
+    userBits = userBits,
+    echoBits = echoBits
+  ))
   private lazy val extraBitsRange = (slvIdBits - 1, mstMaxIdBits)
   private lazy val mstSize = mstParams.length
   private lazy val slvSize = slvParams.length
