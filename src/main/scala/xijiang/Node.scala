@@ -32,7 +32,7 @@ case class NodeParam(
   cpuNum: Int = 1, // Only applied in CC
   addressRange: (Long, Long) = (0L, 0L), // Only applied in HNI
   defaultHni: Boolean = false, // Only applied in HNI
-  outstanding: Int = 16, // Only applied in HNI
+  outstanding: Int = 4, // Only applied in HNI
   socket: String = "sync"
 )
 
