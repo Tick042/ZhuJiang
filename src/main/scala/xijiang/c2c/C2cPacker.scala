@@ -5,7 +5,7 @@ import org.chipsalliance.cde.config.Parameters
 import xs.utils.ResetRRArbiter
 import zhujiang.{ZJBundle, ZJModule, ZJParametersKey}
 
-class C2cIcnBundle(implicit p:Parameters) extends ZJBundle {
+class C2cchiBundle(implicit p:Parameters) extends ZJBundle {
   val req = Decoupled(UInt(rreqFlitBits.W))
   val rsp = Decoupled(UInt(respFlitBits.W))
   val dat = Decoupled(UInt(dataFlitBits.W))
@@ -124,9 +124,9 @@ class C2cInitializer extends Module {
 
 class C2cPacker(implicit p:Parameters) extends ZJModule {
   val io = IO(new Bundle {
-    val icn = new Bundle {
-      val tx = new C2cIcnBundle
-      val rx = Flipped(new C2cIcnBundle)
+    val chi = new Bundle {
+      val tx = new C2cchiBundle
+      val rx = Flipped(new C2cchiBundle)
     }
     val userTx = Input(UInt(C2cUtils.slotDataBits.W))
     val userRx = Output(Valid(UInt(C2cUtils.slotDataBits.W)))
@@ -155,10 +155,10 @@ class C2cPacker(implicit p:Parameters) extends ZJModule {
   initializer.io.link.rx.valid := rxPipe.valid
   initializer.io.link.rx.bits := rxPipe.bits.asUInt
   //tx connections
-  txreq.io.enq <> io.icn.rx.req
-  txrsp.io.enq <> io.icn.rx.rsp
-  txdat.io.enq <> io.icn.rx.dat
-  txsnp.io.enq <> io.icn.rx.snp
+  txreq.io.enq <> io.chi.rx.req
+  txrsp.io.enq <> io.chi.rx.rsp
+  txdat.io.enq <> io.chi.rx.dat
+  txsnp.io.enq <> io.chi.rx.snp
 
   private val txqSeq = Seq(txreq, txrsp, txdat, txsnp)
   for(txq <- txqSeq) {
@@ -179,16 +179,16 @@ class C2cPacker(implicit p:Parameters) extends ZJModule {
     dispatcher.io.rx.grants(rxq.chnId) <> rxq.io.grant
   }
 
-  io.icn.tx.req <> rxreq.io.deq
-  io.icn.tx.rsp <> rxrsp.io.deq
-  io.icn.tx.dat <> rxdat.io.deq
-  io.icn.tx.snp <> rxsnp.io.deq
+  io.chi.tx.req <> rxreq.io.deq
+  io.chi.tx.rsp <> rxrsp.io.deq
+  io.chi.tx.dat <> rxdat.io.deq
+  io.chi.tx.snp <> rxsnp.io.deq
 }
 
 class C2cLoopBack(implicit p:Parameters) extends ZJModule {
   val io = IO(new Bundle {
-    val enq = Flipped(new C2cIcnBundle)
-    val deq = new C2cIcnBundle
+    val enq = Flipped(new C2cchiBundle)
+    val deq = new C2cchiBundle
     val p0UserIn = Input(UInt(C2cUtils.slotDataBits.W))
     val p0UserOut = Output(Valid(UInt(C2cUtils.slotDataBits.W)))
     val p1UserIn = Input(UInt(C2cUtils.slotDataBits.W))
@@ -248,27 +248,27 @@ class C2cLoopBack(implicit p:Parameters) extends ZJModule {
   p0.io.c2c.rx.valid := link1VSeq.head
   p0.io.c2c.rx.bits := link1BSeq.head
 
-  p0.io.icn.rx <> io.enq
-  p1.io.icn.rx <> p1.io.icn.tx
-  io.deq <> p0.io.icn.tx
+  p0.io.chi.rx <> io.enq
+  p1.io.chi.rx <> p1.io.chi.tx
+  io.deq <> p0.io.chi.tx
 
-  addCounter(p0.io.icn.rx.req, "enq_req")
-  addCounter(p0.io.icn.rx.rsp, "enq_rsp")
-  addCounter(p0.io.icn.rx.dat, "enq_dat")
-  addCounter(p0.io.icn.rx.snp, "enq_snp")
+  addCounter(p0.io.chi.rx.req, "enq_req")
+  addCounter(p0.io.chi.rx.rsp, "enq_rsp")
+  addCounter(p0.io.chi.rx.dat, "enq_dat")
+  addCounter(p0.io.chi.rx.snp, "enq_snp")
 
-  addCounter(p1.io.icn.tx.req, "tx_req")
-  addCounter(p1.io.icn.tx.rsp, "tx_rsp")
-  addCounter(p1.io.icn.tx.dat, "tx_dat")
-  addCounter(p1.io.icn.tx.snp, "tx_snp")
+  addCounter(p1.io.chi.tx.req, "tx_req")
+  addCounter(p1.io.chi.tx.rsp, "tx_rsp")
+  addCounter(p1.io.chi.tx.dat, "tx_dat")
+  addCounter(p1.io.chi.tx.snp, "tx_snp")
 
-  addCounter(p1.io.icn.rx.req, "rx_req")
-  addCounter(p1.io.icn.rx.rsp, "rx_rsp")
-  addCounter(p1.io.icn.rx.dat, "rx_dat")
-  addCounter(p1.io.icn.rx.snp, "rx_snp")
+  addCounter(p1.io.chi.rx.req, "rx_req")
+  addCounter(p1.io.chi.rx.rsp, "rx_rsp")
+  addCounter(p1.io.chi.rx.dat, "rx_dat")
+  addCounter(p1.io.chi.rx.snp, "rx_snp")
 
-  addCounter(p0.io.icn.tx.req, "deq_req")
-  addCounter(p0.io.icn.tx.rsp, "deq_rsp")
-  addCounter(p0.io.icn.tx.dat, "deq_dat")
-  addCounter(p0.io.icn.tx.snp, "deq_snp")
+  addCounter(p0.io.chi.tx.req, "deq_req")
+  addCounter(p0.io.chi.tx.rsp, "deq_rsp")
+  addCounter(p0.io.chi.tx.dat, "deq_dat")
+  addCounter(p0.io.chi.tx.snp, "deq_snp")
 }

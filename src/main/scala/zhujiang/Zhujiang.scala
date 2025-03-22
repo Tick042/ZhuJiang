@@ -61,7 +61,7 @@ class Zhujiang(isTop:Boolean = false)(implicit p: Parameters) extends ZJModule w
     icn.resetInject.foreach(_ := DontCare)
     val pfxStr = s"${pfx}_${idx.map(_.toString).getOrElse("")}"
     val dev = Module(new SocketIcnSide(icn.node))
-    dev.io.icn <> icn
+    dev.io.dev <> icn
     dev.reset := placeResetGen(pfxStr, icn)
     dev.suggestName(s"${pfxStr}_socket")
     dev

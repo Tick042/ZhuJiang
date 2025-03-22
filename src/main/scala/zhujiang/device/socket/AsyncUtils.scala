@@ -142,12 +142,12 @@ abstract class BaseIcnAsyncModule(node: Node, icnSide:Boolean)(implicit p: Param
 
 class IcnSideAsyncModule(node: Node)(implicit p: Parameters) extends BaseIcnAsyncModule(node = node, icnSide = true) {
   val io = IO(new Bundle {
-    val icn = new DeviceIcnBundle(node)
+    val dev = new DeviceIcnBundle(node)
     val async = new IcnAsyncBundle(node)
   })
-  val icnRxBundle = io.icn.rx
+  val icnRxBundle = io.dev.rx
   val asyncTxBundle = io.async.tx
-  val icnTxBundle = io.icn.tx
+  val icnTxBundle = io.dev.tx
   val asyncRxBundle = io.async.rx
   makeConnections()
 }
