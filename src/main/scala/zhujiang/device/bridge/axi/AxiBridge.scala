@@ -5,13 +5,13 @@ import chisel3.util._
 import org.chipsalliance.cde.config.Parameters
 import xijiang.{Node, NodeType}
 import xijiang.router.base.DeviceIcnBundle
-import xs.utils.perf.HasPerfLogging
+import xs.utils.perf.XSPerfAccumulate
 import xs.utils.{PickOneLow, ResetRRArbiter}
 import zhujiang.ZJModule
 import zhujiang.axi._
 import zhujiang.chi.{DatOpcode, DataFlit, ReqFlit, ReqOpcode, RespFlit}
 
-class AxiBridge(node: Node)(implicit p: Parameters) extends ZJModule with HasPerfLogging {
+class AxiBridge(node: Node)(implicit p: Parameters) extends ZJModule {
   private val compareTagBits = 32
   private val tagOffset = 6
   require(node.nodeType == NodeType.S)
@@ -122,8 +122,10 @@ class AxiBridge(node: Node)(implicit p: Parameters) extends ZJModule with HasPer
   icn.tx.data.get.bits := readDataPipe.io.deq.bits.asTypeOf(icn.tx.data.get.bits)
   readDataPipe.io.deq.ready := icn.tx.data.get.ready
 
-  XSPerfAccumulate("read_req_cnt", icn.rx.req.get.fire && req.Opcode === ReqOpcode.ReadNoSnp)
-  XSPerfAccumulate("write_req_cnt", icn.rx.req.get.fire && (req.Opcode === ReqOpcode.WriteNoSnpPtl || req.Opcode === ReqOpcode.WriteNoSnpFull))
-  XSPerfAccumulate("total_mem_req_cnt", icn.rx.req.get.fire)
-  XSPerfAccumulate("total_req_retention_cnt", cms.map(_.io.info.valid).reduce(_||_))
+  XSPerfAccumulate(Seq(
+    ("read_req_cnt", icn.rx.req.get.fire && req.Opcode === ReqOpcode.ReadNoSnp),
+    ("write_req_cnt", icn.rx.req.get.fire && (req.Opcode === ReqOpcode.WriteNoSnpPtl || req.Opcode === ReqOpcode.WriteNoSnpFull)),
+    ("total_mem_req_cnt", icn.rx.req.get.fire),
+    ("total_req_retention_cnt", cms.map(_.io.info.valid).reduce(_||_))
+  ))
 }
