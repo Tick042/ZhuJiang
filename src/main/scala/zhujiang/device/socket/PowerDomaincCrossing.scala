@@ -31,9 +31,9 @@ class PowerDomainCrossingTx[T <: Data](gen:T) extends Module {
   io.clean := tokens === 5.U
 
   when(enqFire && !rxg) {
-    tokens := tokens + 1.U
-  }.elsewhen(!enqFire && rxg) {
     tokens := tokens - 1.U
+  }.elsewhen(!enqFire && rxg) {
+    tokens := tokens + 1.U
   }
   assert(tokens <= 5.U)
 }
