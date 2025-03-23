@@ -8,6 +8,7 @@ import xijiang.{NodeType, Ring}
 import dongjiang._
 import xijiang.router.base.IcnBundle
 import xs.utils.debug.{DomainInfo, HardwareAssertion}
+import xs.utils.perf.PerfCounterUtils
 import xs.utils.sram.SramBroadcastBundle
 import xs.utils.{DFTResetSignals, ResetGen}
 import zhujiang.axi.{AxiBundle, ExtAxiBundle}
@@ -199,4 +200,5 @@ trait NocIOHelper {
       dontTouch(a)
     })
   }
+  PerfCounterUtils.genXmrHelper()
 }
