@@ -47,7 +47,7 @@ class PowerDomainCrossingRx[T <: Data](gen:T) extends Module {
   private val rxq = Module(new Queue(gen = gen, entries = 5, flow = true))
   private val rxv = RegNext(io.pdc.valid, false.B)
   private val rxd = RegEnable(io.pdc.bits, io.pdc.valid)
-  private val txg = RegNext(io.deq.fire)
+  private val txg = RegNext(io.deq.fire, false.B)
   rxq.io.enq.valid := rxv
   rxq.io.enq.bits := rxd
   io.pdc.grant := txg
@@ -126,24 +126,22 @@ class DevPdcBundle(node:Node)(implicit p:Parameters) extends ZJBundle {
 }
 
 trait PdcConnHelper {
-  def syncToPdc(tx:PowerDomainCrossingBundle[UInt], rx:DecoupledIO[Data], chn:String):Bool = {
-    val pdcx = Module(new PowerDomainCrossingTx(tx.bits.cloneType))
-    pdcx.suggestName(s"${chn}_pwr_dmn_x_tx")
-    pdcx.io.enq.valid := rx.valid
-    pdcx.io.enq.bits := rx.bits.asTypeOf(pdcx.io.enq.bits)
-    rx.ready := pdcx.io.enq.ready
-    tx <> pdcx.io.pdc
-    pdcx.io.clean
+  def syncToPdc(tx:PowerDomainCrossingBundle[UInt], rx:DecoupledIO[Data], chn:String) = {
+    val pdc = Module(new PowerDomainCrossingTx(tx.bits.cloneType))
+    pdc.io.enq.valid := rx.valid
+    pdc.io.enq.bits := rx.bits.asTypeOf(pdc.io.enq.bits)
+    rx.ready := pdc.io.enq.ready
+    tx <> pdc.io.pdc
+    pdc
   }
 
-  def pdcToSync(tx:DecoupledIO[Data], rx:PowerDomainCrossingBundle[UInt], chn:String):Bool = {
-    val pdcx = Module(new PowerDomainCrossingRx(rx.bits.cloneType))
-    pdcx.suggestName(s"${chn}_pwr_dmn_x_rx")
-    pdcx.io.pdc <> rx
-    tx.valid := pdcx.io.deq.valid
-    tx.bits := pdcx.io.deq.bits.asTypeOf(tx.bits)
-    pdcx.io.deq.ready := tx.ready
-    pdcx.io.clean
+  def pdcToSync(tx:DecoupledIO[Data], rx:PowerDomainCrossingBundle[UInt], chn:String) = {
+    val pdc = Module(new PowerDomainCrossingRx(rx.bits.cloneType))
+    pdc.io.pdc <> rx
+    tx.valid := pdc.io.deq.valid
+    tx.bits := pdc.io.deq.bits.asTypeOf(tx.bits)
+    pdc.io.deq.ready := tx.ready
+    pdc
   }
 }
 
@@ -158,14 +156,18 @@ class ChiPdcIcnSide(node:Node)(implicit p:Parameters) extends ZJModule with PdcC
   for((chn, idx) <- node.ejects.zipWithIndex) {
     val rx = io.dev.rx.getBundle(chn).get
     val tx = io.icn.tx.getBundle(chn)
-    ejCleanVec(idx) := syncToPdc(tx, rx, chn)
+    val pdc = syncToPdc(tx, rx, chn)
+    pdc.suggestName(s"${chn.toLowerCase}_pwr_dmn_x_tx")
+    ejCleanVec(idx) := pdc.io.clean
   }
 
   private val ijCleanVec = Wire(Vec(node.injects.size, Bool()))
   for((chn, idx) <- node.injects.zipWithIndex) {
     val tx = io.dev.tx.getBundle(chn).get
     val rx = io.icn.rx.getBundle(chn)
-    ijCleanVec(idx) := pdcToSync(tx, rx, chn)
+    val pdc = pdcToSync(tx, rx, chn)
+    pdc.suggestName(s"${chn.toLowerCase}_pwr_dmn_x_rx")
+    ijCleanVec(idx) := pdc.io.clean
   }
 
   io.clean := RegNext(Cat(ejCleanVec ++ ijCleanVec).andR)
@@ -182,14 +184,18 @@ class ChiPdcDevSide(node:Node)(implicit p:Parameters) extends ZJModule with PdcC
   for((chn, idx) <- node.ejects.zipWithIndex) {
     val rx = io.dev.rx.getBundle(chn)
     val tx = io.icn.tx.getBundle(chn).get
-    ejCleanVec(idx) := pdcToSync(tx, rx, chn)
+    val pdc = pdcToSync(tx, rx, chn)
+    pdc.suggestName(s"${chn.toLowerCase}_pwr_dmn_x_rx")
+    ejCleanVec(idx) := pdc.io.clean
   }
 
   private val ijCleanVec = Wire(Vec(node.injects.size, Bool()))
   for((chn, idx) <- node.injects.zipWithIndex) {
     val tx = io.dev.tx.getBundle(chn)
     val rx = io.icn.rx.getBundle(chn).get
-    ijCleanVec(idx) := syncToPdc(tx, rx, chn)
+    val pdc = syncToPdc(tx, rx, chn)
+    pdc.suggestName(s"${chn.toLowerCase}_pwr_dmn_x_tx")
+    ijCleanVec(idx) := pdc.io.clean
   }
 
   io.clean := RegNext(Cat(ejCleanVec ++ ijCleanVec).andR)
