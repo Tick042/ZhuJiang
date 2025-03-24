@@ -20,7 +20,9 @@ package object router {
     private val completerSelOH = possibleCompleters.map(_.isReqCompleter(addr, router.ci, memAttr, zjParams.hnxBankOff))
     private val completerId = possibleCompleters.map(_.nodeId.U(niw.W))
     private val reqTarget = Mux(Cat(completerSelOH).orR, Mux1H(completerSelOH, completerId), defaultHni.nodeId.U)
-    assert(PopCount(completerSelOH) <= 1.U)
+    when(icn.rx.req.get.valid) {
+      assert(PopCount(completerSelOH) <= 1.U)
+    }
     if(p(ZJParametersKey).tfsParams.isEmpty) injectsMap("REQ").bits.tgt := reqTarget
   }
 }
