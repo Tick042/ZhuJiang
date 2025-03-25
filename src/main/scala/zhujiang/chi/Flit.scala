@@ -185,6 +185,15 @@ class ReqAddrBundle(implicit p: Parameters) extends ZJBundle {
   require(this.getWidth == raw)
 }
 
+class DeviceReqAddrBundle(implicit p: Parameters) extends ZJBundle {
+  private val cpuSpaceBits = zjParams.cpuSpaceBits
+  val ci = UInt(ciIdBits.W)
+  val tag = UInt((raw - ciIdBits - cpuIdBits - cpuSpaceBits).W)
+  val core = UInt(cpuIdBits.W)
+  val dev = UInt(cpuSpaceBits.W)
+  require(this.getWidth == raw)
+}
+
 class SnpAddrBundle(implicit p: Parameters) extends ZJBundle {
   val ci = UInt(ciIdBits.W)
   val tag = UInt((raw - ciIdBits - 3).W)
