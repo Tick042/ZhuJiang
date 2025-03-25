@@ -20,6 +20,7 @@ class HomeWrapper(nodes:Seq[Node], nrFriends:Int)(implicit p:Parameters) extends
   val io = IO(new Bundle {
     val lans = MixedVec(nodes.map(new DeviceIcnBundle(_)))
     val friends = Input(Vec(nodes.size, Vec(nrFriends, UInt(niw.W))))
+    val nids = Input(Vec(nodes.size, UInt(niw.W)))
     val ci = Input(UInt(ciIdBits.W))
     val bank = Input(UInt(nodes.head.bankBits.W))
     val dfx = Input(new DftWires)
@@ -87,34 +88,39 @@ class HomeWrapper(nodes:Seq[Node], nrFriends:Int)(implicit p:Parameters) extends
     val txBdSeq = hnxLans.map(_.rx.getBundle(chn).get)
     val txBd = hnx.io.lan.tx.getBundle(chn).get
 
-    val tx = if(chn == "ERQ" && mems.nonEmpty) {
+    val tgt = if(chn == "ERQ" && mems.nonEmpty) {
       val addr = txBd.bits.asTypeOf(new HReqFlit).Addr.asTypeOf(new ReqAddrBundle)
       val memSelOH = mems.map(m => addr.checkBank(m.bankBits, m.bankId.U, zjParams.memBankOff))
       val memIds = mems.map(_.nodeId.U(niw.W))
-      val erqFlit = WireInit(txBd.bits.asTypeOf(new HReqFlit))
-      erqFlit.TgtID := Mux1H(memSelOH, memIds)
-      val res = Wire(txBd.cloneType)
-      res.valid := txBd.valid
-      txBd.ready := res.ready
-      res.bits := erqFlit.asTypeOf(res.bits)
-      res
+      Mux1H(memSelOH, memIds)
     } else {
-      txBd
+      txBd.bits.asTypeOf(new RingFlit(txBd.bits.getWidth)).TgtID
     }
 
-    if(txBdSeq.size == 1) {
-      txBdSeq.head <> tx
+    val friendsHitVec = io.friends.map(fs => Cat(fs.map(_ === tgt)).orR)
+    val srcId = Mux1H(friendsHitVec, io.nids)
+
+    val txd = if(chn == "ERQ" && mems.nonEmpty) {
+      val ori = txBd.bits.asTypeOf(new HReqFlit)
+      val res = WireInit(ori)
+      val noDmt = ori.ReturnNID.get.andR
+      res.ReturnNID.get := Mux(noDmt, srcId, ori.ReturnNID.get)
+      res.TgtID := tgt
+      res.asTypeOf(txBd.bits)
     } else {
-      val tgt = tx.bits.asTypeOf(new RingFlit(tx.bits.getWidth)).tgt.asTypeOf(new NodeIdBundle).router
-      val friendsHitVec = io.friends.map(fs => Cat(fs.map(_ === tgt)).orR)
-      for(i <- txBdSeq.indices) {
-        txBdSeq(i).valid := tx.valid & friendsHitVec(i)
-        txBdSeq(i).bits := tx.bits
-      }
-      tx.ready := Mux1H(friendsHitVec, txBdSeq.map(_.ready))
-      when(tx.valid) {
-        assert(PopCount(friendsHitVec) === 1.U)
-      }
+      val ori = txBd.bits.asTypeOf(new RingFlit(txBd.bits.getWidth))
+      val res = WireInit(ori)
+      res.TgtID := tgt
+      res.asTypeOf(txBd.bits)
+    }
+
+    for(i <- txBdSeq.indices) {
+      txBdSeq(i).valid := txBd.valid & friendsHitVec(i)
+      txBdSeq(i).bits := txd
+    }
+    txBd.ready := Mux1H(friendsHitVec, txBdSeq.map(_.ready))
+    when(txBd.valid) {
+      assert(PopCount(friendsHitVec) === 1.U)
     }
   }
 

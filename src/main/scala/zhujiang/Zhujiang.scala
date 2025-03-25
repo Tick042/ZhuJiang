@@ -129,6 +129,7 @@ class Zhujiang(isTop:Boolean = false)(implicit p: Parameters) extends ZJModule w
     val icnSeq = hfIcnSeq(i)._2
     for(j <- icnSeq.indices) {
       hfDevSeq(i).io.lans(j) <> icnSeq(j)
+      hfDevSeq(i).io.nids(j) := icnSeq(j).node.nodeId.U
       for(k <- 0 until nrHfFrnd) {
         val frnds = icnSeq(j).node.friends.map(_.nodeId.U(niw.W))
         if(k < frnds.size) hfDevSeq(i).io.friends(j)(k) := frnds(k)
