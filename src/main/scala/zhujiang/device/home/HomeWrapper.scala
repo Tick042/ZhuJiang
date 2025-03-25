@@ -10,7 +10,6 @@ import xijiang.{Node, NodeType}
 import xijiang.router.base.DeviceIcnBundle
 import xs.utils.ResetRRArbiter
 import xs.utils.debug.{DomainInfo, HardwareAssertion}
-import xs.utils.perf.PerfCounterUtils
 import zhujiang.chi.{ChiBuffer, HReqFlit, NodeIdBundle, ReqAddrBundle, RingFlit}
 
 @instantiable
@@ -131,6 +130,4 @@ class HomeWrapper(nodes:Seq[Node], nrFriends:Int)(implicit p:Parameters) extends
   @public
   val assertionInfo = DomainInfo(assertionNode.desc)
   assertionOut <> assertionNode.assertion
-
-  PerfCounterUtils.genXmrHelper()
 }
