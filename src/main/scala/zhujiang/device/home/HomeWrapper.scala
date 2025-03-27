@@ -38,8 +38,8 @@ class HomeWrapper(nodes:Seq[Node], nrFriends:Int)(implicit p:Parameters) extends
     pipe.suggestName(s"lan_${i}_pipe_$j")
   }
   private val inbound = lanPipes.map({ ps =>
-    val dev = ps.head.io.dev
-    Cat(dev.node.ejects.map(chn => dev.tx.getBundle(chn).get.valid)).orR
+    val icn = ps.head.io.icn
+    Cat(icn.node.ejects.map(chn => icn.tx.getBundle(chn).get.valid)).orR
   }).reduce(_ | _)
 
   cg.io.CK := clock
