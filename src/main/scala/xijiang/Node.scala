@@ -26,7 +26,6 @@ object NodeType {
 case class NodeParam(
   attr: String = "",
   nodeType: Int = NodeType.P,
-  splitFlit: Boolean = false,
   bankId: Int = 0, // Only applied in HNF
   hfpId: Int = 0, // HNF port id // Only applied in HNF)
   cpuNum: Int = 1, // Only applied in CC
@@ -43,7 +42,6 @@ case class Node(
   aidBits: Int = 3,
   ringSize: Int = 3,
   globalId: Int = 0,
-  splitFlit: Boolean = false,
   domainId:Int = 0,
   bankId: Int = 0, // Only applied in HNF
   hfpId: Int = 0, // Only applied in HNF

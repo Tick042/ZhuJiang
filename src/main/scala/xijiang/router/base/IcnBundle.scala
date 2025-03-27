@@ -22,24 +22,25 @@ trait BaseIcnMonoBundle {
 }
 
 class IcnTxBundle(node: Node)(implicit p: Parameters) extends ZJBundle with BaseIcnMonoBundle {
+  private val split = zjParams.splitFlit
   private val illegal = node.ejects.contains("REQ") && node.ejects.contains("ERQ")
   require(!illegal)
   val req = if(node.ejects.contains("REQ")) {
-    if(node.splitFlit) Some(Decoupled(new RReqFlit)) else Some(Decoupled(UInt(rreqFlitBits.W)))
+    if(split) Some(Decoupled(new RReqFlit)) else Some(Decoupled(UInt(rreqFlitBits.W)))
   } else if(node.ejects.contains("ERQ")) {
-    if(node.splitFlit) Some(Decoupled(new HReqFlit)) else Some(Decoupled(UInt(hreqFlitBits.W)))
+    if(split) Some(Decoupled(new HReqFlit)) else Some(Decoupled(UInt(hreqFlitBits.W)))
   } else None
 
   val resp = if(node.ejects.contains("RSP")) {
-    if(node.splitFlit) Some(Decoupled(new RespFlit)) else Some(Decoupled(UInt(respFlitBits.W)))
+    if(split) Some(Decoupled(new RespFlit)) else Some(Decoupled(UInt(respFlitBits.W)))
   } else None
 
   val data = if(node.ejects.contains("DAT")) {
-    if(node.splitFlit) Some(Decoupled(new DataFlit)) else Some(Decoupled(UInt(dataFlitBits.W)))
+    if(split) Some(Decoupled(new DataFlit)) else Some(Decoupled(UInt(dataFlitBits.W)))
   } else None
 
   val snoop = if(node.ejects.contains("SNP")) {
-    if(node.splitFlit) Some(Decoupled(new SnoopFlit)) else Some(Decoupled(UInt(snoopFlitBits.W)))
+    if(split) Some(Decoupled(new SnoopFlit)) else Some(Decoupled(UInt(snoopFlitBits.W)))
   } else None
 
   def getBundle(chn: String): Option[DecoupledIO[Data]] = {
@@ -68,24 +69,25 @@ class IcnTxBundle(node: Node)(implicit p: Parameters) extends ZJBundle with Base
 }
 
 class IcnRxBundle(node: Node)(implicit p: Parameters) extends ZJBundle with BaseIcnMonoBundle {
+  private val split = zjParams.splitFlit
   private val illegal = node.injects.contains("REQ") && node.injects.contains("ERQ")
   require(!illegal)
   val req = if(node.injects.contains("REQ")){
-    if(node.splitFlit) Some(Flipped(Decoupled(new RReqFlit))) else Some(Flipped(Decoupled(UInt(rreqFlitBits.W))))
+    if(split) Some(Flipped(Decoupled(new RReqFlit))) else Some(Flipped(Decoupled(UInt(rreqFlitBits.W))))
   } else if(node.injects.contains("ERQ")) {
-    if(node.splitFlit) Some(Flipped(Decoupled(new HReqFlit))) else Some(Flipped(Decoupled(UInt(hreqFlitBits.W))))
+    if(split) Some(Flipped(Decoupled(new HReqFlit))) else Some(Flipped(Decoupled(UInt(hreqFlitBits.W))))
   } else None
 
   val resp = if(node.injects.contains("RSP")) {
-    if(node.splitFlit) Some(Flipped(Decoupled(new RespFlit))) else Some(Flipped(Decoupled(UInt(respFlitBits.W))))
+    if(split) Some(Flipped(Decoupled(new RespFlit))) else Some(Flipped(Decoupled(UInt(respFlitBits.W))))
   } else None
 
   val data = if(node.injects.contains("DAT")) {
-    if(node.splitFlit) Some(Flipped(Decoupled(new DataFlit))) else Some(Flipped(Decoupled(UInt(dataFlitBits.W))))
+    if(split) Some(Flipped(Decoupled(new DataFlit))) else Some(Flipped(Decoupled(UInt(dataFlitBits.W))))
   } else None
 
   val snoop = if(node.injects.contains("SNP")) {
-    if(node.splitFlit) Some(Flipped(Decoupled(new SnoopFlit))) else Some(Flipped(Decoupled(UInt(snoopFlitBits.W))))
+    if(split) Some(Flipped(Decoupled(new SnoopFlit))) else Some(Flipped(Decoupled(UInt(snoopFlitBits.W))))
   } else None
 
   def getBundle(chn: String): Option[DecoupledIO[Data]] = {

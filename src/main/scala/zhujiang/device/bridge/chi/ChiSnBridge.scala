@@ -17,8 +17,7 @@ class ChiSnBridge(node: Node)(implicit p: Parameters) extends ZJModule {
   private val snNode = Node(
     nodeType = NodeType.S,
     nidBits = node.nidBits,
-    aidBits = node.aidBits,
-    splitFlit = true
+    aidBits = node.aidBits
   )
 
   val icn = IO(new DeviceIcnBundle(node))
