@@ -2,7 +2,7 @@ package dongjiang.frontend.decode
 
 import chisel3._
 import chisel3.util._
-import dongjiang.bundle
+import dongjiang.{DJBundle, bundle}
 import org.chipsalliance.cde.config.Parameters
 import zhujiang.chi._
 import dongjiang.bundle._
@@ -10,7 +10,7 @@ import xs.utils.ParallelLookUp
 import dongjiang.frontend.decode.DecodeCHI._
 import math.max
 import dongjiang.bundle.ChiChannel._
-
+import xs.utils.debug._
 
 /*
  * (UInt, Seq[(UInt, )])
@@ -52,11 +52,30 @@ class TaskInst extends Bundle {
   val fwdResp     = UInt(ChiResp.width.W)
 }
 
+trait HasPackTaskInst { this: Bundle => val inst = new TaskInst() }
+
+object CMID {
+  lazy val SNP  = 0
+  lazy val READ = 1
+  lazy val DL   = 2
+  lazy val WOA  = 3
+}
+
 trait HasOperations { this: Bundle =>
   val snoop       = Bool()
   val read        = Bool()
   val dataless    = Bool()
   val wriOrAtm    = Bool() // Write or Atomic
+  def valid       = snoop | read | dataless | wriOrAtm
+  def invalid     = !valid
+  def cmid: UInt  = {
+    PriorityMux(Seq(
+      snoop    -> CMID.SNP.U,
+      read     -> CMID.READ.U,
+      dataless -> CMID.DL.U,
+      wriOrAtm -> CMID.WOA.U,
+    ))
+  }
 }
 
 class Operations(implicit p: Parameters) extends Bundle with HasOperations
@@ -88,7 +107,23 @@ trait HasTaskCode { this: Bundle with HasOperations =>
 
 class TaskCode extends Bundle with HasOperations with HasTaskCode
 
-trait HasCommitCode { this: Bundle with HasOperations =>
+trait HasPackTaskCode { this: Bundle => val code = new TaskCode() }
+
+trait HasWriDirCode { this: Bundle =>
+  // Write Directory
+  val wriSF       = UInt(SnpTgt.width.W)
+  val wriLLC      = Bool()
+  val srcValid    = Bool()
+  val llcState    = UInt(ChiState.width.W)
+
+  def wriDir      = wriSF | wriLLC
+}
+
+class WriDirCode  extends Bundle with HasWriDirCode
+
+trait HasPackWriDirCode { this: Bundle => val code = new WriDirCode() }
+
+trait HasCommitCode { this: Bundle with HasWriDirCode =>
   // Need wait second task done
   val waitSecDone = Bool()
 
@@ -100,17 +135,17 @@ trait HasCommitCode { this: Bundle with HasOperations =>
   val resp        = UInt(ChiResp.width.W)
   val fwdResp     = UInt(ChiResp.width.W)
 
-  // Write Directory
-  val wriSF       = UInt(SnpTgt.width.W)
-  val wriLLC      = Bool()
-  val srcValid    = Bool()
-  val llcState    = UInt(ChiState.width.W)
-
   // Not Need Commit
   val noCmt       = Bool()
+
+  // def
+  def valid       = commit | noCmt | wriDir
+  def invalid     = !valid
 }
 
-class CommitCode extends Bundle with HasOperations with HasCommitCode
+class CommitCode extends Bundle with HasWriDirCode with HasCommitCode
+
+trait HasPackCmtCode { this: Bundle => val commit = new CommitCode() }
 
 object DecodeCHI {
   val width = ChiResp.width
@@ -293,40 +328,42 @@ object Decode {
     }
 
     // First Input ChiInst
-    val stateInstVec    = ParallelLookUp(chi.asUInt,    chiInstVec.map(_.asUInt).zip(stateInstVec2))
-    val taskCodeVec     = ParallelLookUp(chi.asUInt,    chiInstVec.map(_.asUInt).zip(taskCodeVec2))
+    val stateInstVec_0    = ParallelLookUp(chi.asUInt,    chiInstVec.map(_.asUInt).zip(stateInstVec2))
+    val taskCodeVec_0     = ParallelLookUp(chi.asUInt,    chiInstVec.map(_.asUInt).zip(taskCodeVec2))
 
-    val taskInstVec2    = ParallelLookUp(chi.asUInt,    chiInstVec.map(_.asUInt).zip(taskInstVec3))
-    val secCodeVec2     = ParallelLookUp(chi.asUInt,    chiInstVec.map(_.asUInt).zip(secCodeVec3))
+    val taskInstVec2_0    = ParallelLookUp(chi.asUInt,    chiInstVec.map(_.asUInt).zip(taskInstVec3))
+    val secCodeVec2_0     = ParallelLookUp(chi.asUInt,    chiInstVec.map(_.asUInt).zip(secCodeVec3))
 
-    val secInstVec3     = ParallelLookUp(chi.asUInt,    chiInstVec.map(_.asUInt).zip(secInstVec4))
-    val cmtCodeVec3     = ParallelLookUp(chi.asUInt,    chiInstVec.map(_.asUInt).zip(commitCodeVec4))
+    val secInstVec3_0     = ParallelLookUp(chi.asUInt,    chiInstVec.map(_.asUInt).zip(secInstVec4))
+    val cmtCodeVec3_0     = ParallelLookUp(chi.asUInt,    chiInstVec.map(_.asUInt).zip(commitCodeVec4))
+    val cmtCodeVec_0      = cmtCodeVec3_0.map(_.head.head)
 
     // Second Input StateInst
-    val taskCode        = ParallelLookUp(state.asUInt,  stateInstVec.map(_.asUInt).zip(taskCodeVec))
+    val taskCode_1        = ParallelLookUp(state.asUInt,  stateInstVec_0.map(_.asUInt).zip(taskCodeVec_0))
 
-    val taskInstVec     = ParallelLookUp(state.asUInt,  stateInstVec.map(_.asUInt).zip(taskInstVec2))
-    val secCodeVec      = ParallelLookUp(state.asUInt,  stateInstVec.map(_.asUInt).zip(secCodeVec2))
+    val taskInstVec_1     = ParallelLookUp(state.asUInt,  stateInstVec_0.map(_.asUInt).zip(taskInstVec2_0))
+    val secCodeVec_1      = ParallelLookUp(state.asUInt,  stateInstVec_0.map(_.asUInt).zip(secCodeVec2_0))
 
-    val secInstVec2     = ParallelLookUp(state.asUInt,  stateInstVec.map(_.asUInt).zip(secInstVec3))
-    val cmtCodeVec2     = ParallelLookUp(state.asUInt,  stateInstVec.map(_.asUInt).zip(cmtCodeVec3))
+    val secInstVec2_1     = ParallelLookUp(state.asUInt,  stateInstVec_0.map(_.asUInt).zip(secInstVec3_0))
+    val cmtCodeVec2_1     = ParallelLookUp(state.asUInt,  stateInstVec_0.map(_.asUInt).zip(cmtCodeVec3_0))
 
     // Third Input TaskInst
-    val secCode         = ParallelLookUp(task.asUInt,   taskInstVec.map(_.asUInt).zip(secCodeVec))
+    val secCode_2         = ParallelLookUp(task.asUInt,   taskInstVec_1.map(_.asUInt).zip(secCodeVec_1))
 
-    val secInstVec      = ParallelLookUp(task.asUInt,   taskInstVec.map(_.asUInt).zip(secInstVec2))
-    val cmtCodeVec      = ParallelLookUp(task.asUInt,   taskInstVec.map(_.asUInt).zip(cmtCodeVec2))
+    val secInstVec_2      = ParallelLookUp(task.asUInt,   taskInstVec_1.map(_.asUInt).zip(secInstVec2_1))
+    val cmtCodeVec_2      = ParallelLookUp(task.asUInt,   taskInstVec_1.map(_.asUInt).zip(cmtCodeVec2_1))
 
     // Fourth Input SecTaskInst
-    val cmtCode         = ParallelLookUp(secTask.asUInt, secInstVec.map(_.asUInt).zip(cmtCodeVec))
+    val cmtCode_3         = ParallelLookUp(secTask.asUInt, secInstVec_2.map(_.asUInt).zip(cmtCodeVec_2))
 
-
-    ((stateInstVec, taskCodeVec), (taskInstVec, secCodeVec), (secInstVec, cmtCodeVec), (taskCode, secCode, cmtCode), (l_ci, l_si ,l_ti, l_sti))
+    ((stateInstVec_0, taskCodeVec_0, cmtCodeVec_0), (taskInstVec_1, secCodeVec_1), (secInstVec_2, cmtCodeVec_2), (taskCode_1, secCode_2, cmtCode_3), (l_ci, l_si ,l_ti, l_sti))
   }
 
   def decode(inst: StateInst, instVec: Vec[StateInst], codeVec: Vec[TaskCode]): TaskCode = ParallelLookUp(inst.asUInt, instVec.map(_.asUInt).zip(codeVec))
 
-  def decode(inst: TaskInst, instVec: Vec[TaskInst], codeVec: Vec[CommitCode]): CommitCode = ParallelLookUp(inst.asUInt, instVec.map(_.asUInt).zip(codeVec))
+  def decode(inst: StateInst, instVec: Vec[StateInst], cmtVec: Vec[CommitCode]): CommitCode = ParallelLookUp(inst.asUInt, instVec.map(_.asUInt).zip(cmtVec))
+
+  def decode(inst: TaskInst, instVec: Vec[TaskInst], cmtVec: Vec[CommitCode]): CommitCode = ParallelLookUp(inst.asUInt, instVec.map(_.asUInt).zip(cmtVec))
 
   def l_ci: Int = decode()._5._1
 
