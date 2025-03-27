@@ -8,32 +8,32 @@ import xijiang.router.base.{DeviceIcnBundle, IcnBundle}
 
 class ChiBuffer(node: Node, depth:Int = 2)(implicit p:Parameters) extends Module {
   val io = IO(new Bundle{
-    val in = new DeviceIcnBundle(node)
-    val out = new IcnBundle(node)
+    val dev = new DeviceIcnBundle(node)
+    val icn = new IcnBundle(node)
   })
-  for((chn, src) <- io.in.rx.elements) {
-    val sink = io.out.tx.elements(chn)
+  for((chn, src) <- io.dev.rx.elements) {
+    val sink = io.icn.tx.elements(chn)
     sink <> Queue(src.asInstanceOf[DecoupledIO[Data]], entries = depth, pipe = true)
   }
-  for((chn, sink) <- io.in.tx.elements) {
-    val src = io.out.rx.elements(chn)
+  for((chn, sink) <- io.dev.tx.elements) {
+    val src = io.icn.rx.elements(chn)
     sink <> Queue(src.asInstanceOf[DecoupledIO[Data]], entries = depth, pipe = true)
   }
 }
 
 object ChiBuffer {
-  def apply(in: IcnBundle, p: Parameters, depth: Int, name: Option[String]): IcnBundle = {
-    val buf = Module(new ChiBuffer(in.node, depth)(p))
-    buf.io.in <> in
+  def apply(icn: IcnBundle, p: Parameters, depth: Int, name: Option[String]): IcnBundle = {
+    val buf = Module(new ChiBuffer(icn.node, depth)(p))
+    buf.io.dev <> icn
     if(name.isDefined) buf.suggestName(name.get)
-    buf.io.out
+    buf.io.icn
   }
 
-  def apply(in: DeviceIcnBundle, p: Parameters, depth:Int, name: Option[String]): IcnBundle = {
-    val buf = Module(new ChiBuffer(in.node, depth)(p))
-    buf.io.in <> in
+  def apply(icn: DeviceIcnBundle, p: Parameters, depth:Int, name: Option[String]): IcnBundle = {
+    val buf = Module(new ChiBuffer(icn.node, depth)(p))
+    buf.io.dev <> icn
     if(name.isDefined) buf.suggestName(name.get)
-    buf.io.out
+    buf.io.icn
   }
 
   def apply(in: IcnBundle, p: Parameters, depth:Int): IcnBundle = {
