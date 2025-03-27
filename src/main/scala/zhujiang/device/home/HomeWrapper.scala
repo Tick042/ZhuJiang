@@ -82,7 +82,7 @@ class HomeWrapper(nodes:Seq[Node], nrFriends:Int)(implicit p:Parameters) extends
     }
   }
 
-  private val mems = zjParams.island.filter(n => n.nodeType == NodeType.S && n.attr == "mem")
+  private val mems = zjParams.island.filter(n => n.nodeType == NodeType.S)
   for(chn <- node.injects) {
     val txBdSeq = hnxLans.map(_.rx.getBundle(chn).get)
     val txBd = hnx.io.lan.tx.getBundle(chn).get
