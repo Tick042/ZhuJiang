@@ -70,7 +70,7 @@ object ZhujiangGlobal {
         ringSize = nodeParams.length,
         globalId = idx,
         domainId = getDomainId(np.nodeType),
-        bankId = if(np.nodeType == NodeType.HF) np.bankId else 0,
+        bankId = if(np.nodeType == NodeType.HF || np.nodeType == NodeType.S) np.bankId else 0,
         hfpId = if(np.nodeType == NodeType.HF) np.hfpId else 0,
         bankBits = if(np.nodeType == NodeType.HF) {
           hnfBankBits

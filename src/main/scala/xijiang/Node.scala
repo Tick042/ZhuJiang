@@ -220,7 +220,7 @@ case class Node(
       ""
     }
 
-    val bankStr = if (nodeType == NodeType.HF) {
+    val bankStr = if (nodeType == NodeType.HF || nodeType == NodeType.S) {
       s"""    bank: $bankId
          |""".stripMargin
     } else {
